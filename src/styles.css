@@ -1,0 +1,508 @@
+:root {
+  color-scheme: dark;
+  font-family: Roboto, Arial, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ink: #f7fbff;
+  --muted: #a9bad0;
+  --panel: rgba(13, 21, 34, 0.82);
+  --panel-strong: rgba(18, 29, 50, 0.94);
+  --line: rgba(255, 255, 255, 0.18);
+  --green: #24e86b;
+  --red: #ff3451;
+  --gold: #ffcb3d;
+  --blue: #29a8ff;
+  --purple: #875cff;
+  --field: #8feee4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #101928;
+  font-family: inherit;
+}
+
+button {
+  border: 0;
+  font: inherit;
+  font-family: inherit;
+}
+
+.game-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+  color: var(--ink);
+  user-select: none;
+}
+
+.canvas-host {
+  position: absolute;
+  inset: 0;
+  background: var(--field);
+}
+
+.canvas-host canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.top-hud,
+.stat-stack,
+.progress-strip,
+.message-stack,
+.overlay {
+  position: absolute;
+  z-index: 2;
+}
+
+.top-hud {
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 4;
+  display: flex;
+  width: min(980px, calc(100% - 24px));
+  align-items: center;
+  gap: 8px;
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+.brand-chip,
+.hud-chip,
+.icon-button,
+.locale-select,
+.stat-chip,
+.toast {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(9, 16, 27, 0.72);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(12px);
+}
+
+.brand-chip {
+  padding: 10px 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  color: #ffffff;
+  background: linear-gradient(135deg, rgba(41, 168, 255, 0.82), rgba(36, 232, 107, 0.76));
+}
+
+.hud-chip {
+  min-width: 82px;
+  padding: 10px 12px;
+  font-size: 1.06rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.cash {
+  color: var(--green);
+}
+
+.score {
+  color: var(--gold);
+}
+
+.icon-button {
+  width: 42px;
+  height: 42px;
+  margin-left: auto;
+  color: var(--ink);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.svg-icon {
+  width: 1.1em;
+  height: 1.1em;
+  flex: 0 0 auto;
+  vertical-align: -0.16em;
+}
+
+.locale-select {
+  min-height: 42px;
+  max-width: 112px;
+  padding: 0 8px;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.icon-button:hover,
+.primary-button:hover,
+.secondary-button:hover,
+.danger-button:hover,
+.buy-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.stat-stack {
+  top: 78px;
+  right: 14px;
+  display: grid;
+  width: 172px;
+  gap: 8px;
+}
+
+.stat-chip {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  font-size: 0.96rem;
+}
+
+.stat-chip b {
+  color: var(--muted);
+}
+
+.stat-chip span {
+  color: var(--gold);
+  font-weight: 900;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.progress-strip {
+  right: 16px;
+  bottom: 16px;
+  left: 16px;
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(8, 16, 28, 0.48);
+}
+
+.progress-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--blue), var(--green), var(--gold));
+  transition: width 120ms linear;
+}
+
+.message-stack {
+  top: 92px;
+  left: 16px;
+  display: grid;
+  gap: 8px;
+  width: min(260px, 42vw);
+  pointer-events: none;
+}
+
+.toast {
+  padding: 10px 12px;
+  font-size: 1.08rem;
+  font-weight: 900;
+  animation: toast-in 160ms ease-out;
+}
+
+.toast.buff {
+  color: var(--green);
+}
+
+.toast.debuff {
+  color: var(--red);
+}
+
+.toast.cash {
+  color: var(--gold);
+}
+
+.overlay {
+  inset: 0;
+  display: none;
+  place-items: center;
+  padding: 18px;
+  background: rgba(5, 10, 18, 0.28);
+  pointer-events: none;
+}
+
+.overlay.is-visible {
+  display: grid;
+  pointer-events: auto;
+}
+
+.panel {
+  width: min(920px, 100%);
+  max-height: min(86dvh, 760px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-strong);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+}
+
+.menu-panel,
+.pause-panel {
+  display: grid;
+  width: min(760px, 100%);
+  gap: 18px;
+  justify-items: center;
+  padding: 28px;
+  text-align: center;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(2.4rem, 7vw, 5.2rem);
+  line-height: 0.95;
+}
+
+h2 {
+  font-size: clamp(1.5rem, 4vw, 2.6rem);
+}
+
+h3 {
+  font-size: 1.18rem;
+}
+
+.menu-stats,
+.shop-heading,
+.button-row,
+.profile-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.menu-stats span,
+.shop-heading span {
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.profile-panel,
+.weapon-panel,
+.leaderboard {
+  display: grid;
+  width: 100%;
+  gap: 10px;
+}
+
+.profile-panel,
+.weapon-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.profile-input,
+.profile-select {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: rgba(4, 10, 18, 0.62);
+  font: inherit;
+}
+
+.leaderboard ol {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 22px;
+}
+
+.leaderboard li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  color: var(--muted);
+}
+
+.primary-button,
+.secondary-button,
+.danger-button,
+.buy-button {
+  min-height: 44px;
+  border-radius: 8px;
+  padding: 11px 16px;
+  color: #06121f;
+  font-weight: 950;
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    filter 120ms ease;
+}
+
+.primary-button {
+  background: linear-gradient(135deg, var(--green), var(--gold));
+}
+
+.secondary-button {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.danger-button {
+  color: #ffffff;
+  background: var(--red);
+}
+
+.shop-panel {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+}
+
+.shop-heading {
+  align-items: center;
+}
+
+.shop-heading h2 {
+  width: 100%;
+  text-align: center;
+}
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.upgrade-card {
+  display: grid;
+  min-height: 172px;
+  gap: 8px;
+  align-content: start;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.upgrade-card.is-locked {
+  filter: saturate(0.45);
+  opacity: 0.72;
+}
+
+.upgrade-card p {
+  color: var(--gold);
+  font-weight: 900;
+}
+
+.upgrade-card small {
+  min-height: 34px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.info-panel {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.info-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wiki-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.wiki-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.buy-button {
+  margin-top: auto;
+  background: var(--purple);
+  color: #ffffff;
+}
+
+.buy-button:disabled {
+  cursor: default;
+  opacity: 0.48;
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 720px) {
+  .top-hud {
+    left: 12px;
+    width: calc(100% - 24px);
+    transform: none;
+  }
+
+  .brand-chip {
+    display: none;
+  }
+
+  .hud-chip {
+    min-width: 0;
+    padding: 9px 8px;
+    font-size: 0.78rem;
+  }
+
+  .locale-select {
+    max-width: 74px;
+    font-size: 0.78rem;
+  }
+
+  .stat-stack {
+    top: auto;
+    right: 12px;
+    bottom: 34px;
+    grid-template-columns: repeat(3, minmax(70px, 1fr));
+    width: min(100% - 24px, 330px);
+  }
+
+  .message-stack {
+    top: 68px;
+    width: min(280px, calc(100% - 24px));
+  }
+
+  .shop-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wiki-grid {
+    grid-template-columns: 1fr;
+  }
+}
