@@ -1,70 +1,129 @@
-export const LEVEL_PROFILES = Object.freeze([
-  profile(1, "First Steps", 1, 118, 8.6, 5, 3, 1, 0, 0, 0, 0, 0.04, 75, 3),
-  profile(2, "Power Lesson", 1.08, 124, 8.9, 6, 3, 1, 0, 0, 0, 0, 0.05, 82, 3),
-  profile(3, "Income Choice", 1.15, 130, 9.2, 6, 4, 1, 0, 0, 0, 0, 0.07, 90, 4),
-  profile(4, "Double Tease", 1.22, 136, 9.5, 7, 4, 2, 1, 0, 0, 0, 0.09, 98, 4),
-  profile(5, "Assistant Lane", 1.3, 142, 9.8, 7, 4, 2, 1, 0, 0, 0, 0.11, 106, 4),
-  profile(6, "First Blocks", 1.38, 150, 10.1, 8, 5, 2, 2, 0, 0, 1, 0.14, 114, 5),
-  profile(7, "Wall Weave", 1.48, 158, 10.5, 8, 5, 2, 3, 0, 0, 1, 0.18, 122, 5),
-  profile(8, "Moving Trouble", 1.58, 166, 10.9, 9, 5, 3, 3, 0, 0, 1, 0.23, 132, 5),
-  profile(9, "First Turret", 1.7, 174, 11.3, 9, 6, 3, 3, 1, 0, 1, 0.27, 142, 6),
-  profile(10, "Crossfire", 1.82, 184, 11.7, 10, 6, 3, 4, 2, 0, 2, 0.3, 152, 6),
-  profile(11, "Split Routes", 1.95, 194, 12.1, 10, 6, 4, 4, 2, 1, 2, 0.34, 164, 6),
-  profile(12, "Elite Barricades", 2.08, 204, 12.5, 11, 7, 4, 5, 2, 1, 2, 0.38, 176, 7),
-  profile(13, "Walker Intro", 2.22, 214, 12.9, 11, 7, 4, 5, 2, 2, 2, 0.41, 188, 7),
-  profile(14, "Score Squeeze", 2.36, 224, 13.2, 12, 7, 5, 5, 3, 2, 3, 0.44, 200, 7),
-  profile(15, "Assistant Trial", 2.52, 236, 13.5, 12, 8, 5, 6, 3, 2, 3, 0.48, 214, 8),
-  profile(16, "Late Ladder", 2.68, 248, 13.8, 13, 8, 5, 6, 3, 3, 3, 0.51, 228, 8),
-  profile(17, "Locked Jackpot", 2.84, 260, 14.1, 13, 8, 6, 6, 4, 3, 4, 0.54, 242, 8),
-  profile(18, "Walking Wall", 3, 272, 14.4, 14, 9, 6, 7, 4, 3, 4, 0.57, 258, 9),
-  profile(19, "Double Decision", 3.18, 284, 14.7, 14, 9, 6, 7, 4, 4, 4, 0.6, 274, 9),
-  profile(20, "Hazard Net", 3.36, 296, 15, 15, 9, 7, 7, 5, 4, 5, 0.63, 292, 9),
-  profile(21, "Skyline Siege", 3.54, 308, 15.25, 15, 10, 7, 8, 5, 4, 5, 0.66, 310, 10),
-  profile(22, "Narrow Choices", 3.74, 320, 15.5, 16, 10, 7, 8, 5, 5, 5, 0.69, 330, 10),
-  profile(23, "Pressure Vault", 3.94, 332, 15.75, 16, 10, 8, 8, 6, 5, 6, 0.72, 350, 10),
-  profile(24, "Elite Walkers", 4.14, 344, 16, 17, 11, 8, 9, 6, 5, 6, 0.75, 372, 11),
-  profile(25, "Ammo Tax", 4.36, 356, 16.2, 17, 11, 8, 9, 6, 6, 6, 0.78, 394, 11),
-  profile(26, "Red Corridor", 4.58, 368, 16.4, 18, 11, 9, 9, 7, 6, 7, 0.81, 418, 11),
-  profile(27, "Assistant Storm", 4.82, 380, 16.6, 18, 12, 9, 10, 7, 6, 7, 0.84, 442, 12),
-  profile(28, "Finish Crusher", 5.06, 392, 16.8, 19, 12, 9, 10, 7, 7, 7, 0.87, 468, 12),
-  profile(29, "Master Route", 5.32, 404, 17, 19, 12, 10, 10, 8, 7, 8, 0.9, 494, 12),
-  profile(30, "Crown Run", 5.6, 420, 17.2, 20, 13, 10, 11, 8, 8, 8, 0.94, 522, 13),
+export const MAX_PROJECTED_LEVEL = 200;
+export const RUN_DURATION_CAP_SECONDS = 120;
+
+const LEVEL_NAMES = Object.freeze([
+  "First Steps",
+  "Power Lesson",
+  "Income Choice",
+  "Double Tease",
+  "Assistant Lane",
+  "First Blocks",
+  "Wall Weave",
+  "Moving Trouble",
+  "First Turret",
+  "Crossfire",
+  "Split Routes",
+  "Elite Barricades",
+  "Walker Intro",
+  "Score Squeeze",
+  "Assistant Trial",
+  "Late Ladder",
+  "Locked Jackpot",
+  "Walking Wall",
+  "Double Decision",
+  "Hazard Net",
+  "Skyline Siege",
+  "Narrow Choices",
+  "Pressure Vault",
+  "Elite Walkers",
+  "Ammo Tax",
+  "Red Corridor",
+  "Assistant Storm",
+  "Finish Crusher",
+  "Master Route",
+  "Crown Run",
 ]);
 
-export function getProfileForLevel(level) {
-  const base = LEVEL_PROFILES[Math.min(level, 30) - 1];
-  if (level <= 30) return base;
+export const LEVEL_PROFILES = Object.freeze(Array.from({ length: MAX_PROJECTED_LEVEL }, (_, index) => createProfile(index + 1)));
 
-  const extra = level - 30;
+export function getProfileForLevel(level) {
+  if (level <= MAX_PROJECTED_LEVEL) return LEVEL_PROFILES[Math.max(1, level) - 1];
+  return createProfile(level);
+}
+
+export function getTargetDurationSeconds(level) {
+  return Math.min(RUN_DURATION_CAP_SECONDS, 30 + Math.floor(level / 10) * 5);
+}
+
+function createProfile(level) {
+  const duration = getTargetDurationSeconds(level);
+  const speed = getBaseSpeed(level);
+  const gateCount = getGateCount(level, duration);
+  const pressure = getPressureCounts(level, gateCount);
+
   return {
-    ...base,
     level,
-    name: `Crown Run +${extra}`,
-    difficulty: Number((base.difficulty + extra * 0.24).toFixed(2)),
-    trackLength: base.trackLength + Math.min(90, extra * 6),
-    speed: base.speed + Math.min(1.4, extra * 0.04),
-    baseReward: base.baseReward + extra * 18,
+    name: getLevelName(level),
+    difficulty: getDifficulty(level),
+    targetDuration: duration,
+    trackLength: Math.round(speed * duration),
+    speed,
+    gateCount,
+    enemyCount: getEnemyCount(level, duration),
+    barricades: pressure.barricades,
+    walls: pressure.walls,
+    shooters: pressure.shooters,
+    walkers: pressure.walkers,
+    blockedUpgrades: getBlockedUpgrades(level, gateCount),
+    hazardChance: getHazardChance(level),
+    baseReward: getBaseReward(level),
+    finishRows: getFinishRows(level),
   };
 }
 
-function profile(...row) {
-  const [level, name, difficulty, trackLength, speed, gateCount, enemyCount, barricades] = row;
-  const [walls, shooters, walkers, blockedUpgrades, hazardChance, baseReward, finishRows] = row.slice(8);
+function getLevelName(level) {
+  const base = LEVEL_NAMES[(level - 1) % LEVEL_NAMES.length];
+  if (level <= LEVEL_NAMES.length) return base;
+  return `${base} ${Math.ceil(level / LEVEL_NAMES.length)}`;
+}
+
+function getDifficulty(level) {
+  const steady = 0.88 + level * 0.13;
+  const late = Math.max(0, level - 80) * 0.02;
+  const elite = Math.max(0, level - 150) * 0.03;
+  return Number((steady + late + elite).toFixed(2));
+}
+
+function getBaseSpeed(level) {
+  const steady = 8.4 + Math.min(level, 80) * 0.09;
+  const late = Math.max(0, Math.min(level - 80, 70)) * 0.04;
+  const elite = Math.max(0, level - 150) * 0.02;
+  return Number((steady + late + elite).toFixed(2));
+}
+
+function getGateCount(level, duration) {
+  const pressure = Math.min(18, Math.floor(level / 12));
+  return Math.min(52, Math.round(duration / 3.2 + pressure));
+}
+
+function getEnemyCount(level, duration) {
+  return Math.min(38, Math.round(4 + duration / 6 + level * 0.04));
+}
+
+function getPressureCounts(level, gateCount) {
+  const slots = Math.max(0, gateCount - 3);
   return {
-    level,
-    name,
-    difficulty,
-    trackLength,
-    speed,
-    gateCount,
-    enemyCount,
-    barricades,
-    walls,
-    shooters,
-    walkers,
-    blockedUpgrades,
-    hazardChance,
-    baseReward,
-    finishRows,
+    walls: level >= 6 ? Math.min(Math.floor(slots * 0.2), Math.floor(level / 9)) : 0,
+    walkers: level >= 13 ? Math.min(Math.floor(slots * 0.2), Math.floor(level / 11)) : 0,
+    shooters: level >= 9 ? Math.min(Math.floor(slots * 0.22), Math.floor(level / 10)) : 0,
+    barricades: level >= 4 ? Math.min(Math.floor(slots * 0.28), Math.floor(level / 7) + 1) : 0,
   };
+}
+
+function getBlockedUpgrades(level, gateCount) {
+  if (level < 7) return 0;
+  return Math.min(Math.floor(gateCount * 0.22), Math.floor(level / 14) + 1);
+}
+
+function getHazardChance(level) {
+  if (level < 9) return 0.04 + level * 0.008;
+  return Math.min(0.94, 0.12 + level * 0.0042);
+}
+
+function getBaseReward(level) {
+  return Math.round(70 + level * 12 + Math.max(0, level - 80) * 5);
+}
+
+function getFinishRows(level) {
+  return Math.min(28, 3 + Math.floor(level / 6));
 }

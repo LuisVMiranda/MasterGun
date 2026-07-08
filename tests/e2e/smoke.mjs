@@ -39,25 +39,78 @@ try {
   const profileText = await page.getByTestId("profile-name").inputValue();
   if (profileText !== "Dado") throw new Error(`Profile input blocked typed movement keys: ${profileText}`);
 
+  await assertLocalizedInfo(page);
   await page.getByTestId("start-run").click();
   await page.mouse.move(920, 420);
   await page.waitForTimeout(4500);
   await page.mouse.move(360, 420);
-  await page.waitForSelector("[data-testid='shop-panel']", { timeout: 22000 });
+  await page.waitForSelector("[data-testid='shop-panel']", { timeout: 62000 });
   await page.screenshot({ path: join(screenshotDir, "shop.png") });
 
   const cashText = await page.getByTestId("cash-chip").textContent();
   const shopText = await page.getByTestId("shop-panel").textContent();
   const upgradeCardCount = await page.locator(".upgrade-card").count();
   const visibleShop = await page.getByTestId("shop-panel").isVisible();
-  await browser.close();
 
   if (!visibleShop || !cashText?.includes("$")) throw new Error("Smoke flow did not reach a cash shop.");
   if (!shopText?.includes("Level Complete")) throw new Error("Shop did not show the completion summary.");
   if (upgradeCardCount !== 2) throw new Error(`Shop showed ${upgradeCardCount} upgrade choices instead of 2.`);
+  await assertResponsiveShell(browser);
+  await browser.close();
   if (messages.length > 0) throw new Error(`Console issues:\n${messages.join("\n")}`);
 } finally {
   server.kill();
+}
+
+async function assertLocalizedInfo(page) {
+  await page.getByTestId("locale-select").selectOption("pt-BR");
+  await page.getByTestId("info-button").click();
+  const infoText = await page.getByTestId("info-panel").textContent();
+  if (!infoText?.includes("munição") || !infoText.includes("você")) {
+    throw new Error(`Portuguese info panel lost accented text: ${infoText}`);
+  }
+  await page.locator("[data-action='closeInfo']").click();
+  await page.getByTestId("locale-select").selectOption("en");
+}
+
+async function assertResponsiveShell(browser) {
+  const viewports = [
+    { name: "mobile-menu.png", width: 390, height: 844 },
+    { name: "tablet-menu.png", width: 820, height: 1180 },
+    { name: "tv-menu.png", width: 1920, height: 1080 },
+  ];
+
+  for (const viewport of viewports) {
+    const page = await browser.newPage({ viewport });
+    await page.goto(URL, { waitUntil: "networkidle" });
+    await assertElementBounds(page, [".top-hud", ".panel"]);
+    await page.screenshot({ path: join(screenshotDir, viewport.name) });
+    await page.close();
+  }
+}
+
+async function assertElementBounds(page, selectors) {
+  const bounds = await page.evaluate((items) => {
+    return items
+      .map((selector) => {
+        const element = document.querySelector(selector);
+        const rect = element?.getBoundingClientRect();
+        return rect
+          ? { selector, left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: window.innerWidth, height: window.innerHeight }
+          : { selector, missing: true };
+      })
+      .filter(Boolean);
+  }, selectors);
+  const issues = bounds.map(getBoundsIssue).filter(Boolean);
+
+  if (issues.length > 0) throw new Error(`Responsive shell issues:\n${issues.join("\n")}`);
+}
+
+function getBoundsIssue(bounds) {
+  if (bounds.missing) return `${bounds.selector} missing`;
+  const overflowX = bounds.left < -1 || bounds.right > bounds.width + 1;
+  const overflowY = bounds.top < -1 || bounds.bottom > bounds.height + 1;
+  return overflowX || overflowY ? `${bounds.selector} out of bounds ${JSON.stringify(bounds)}` : "";
 }
 
 async function waitForServer(url) {

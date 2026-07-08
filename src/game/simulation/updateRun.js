@@ -6,6 +6,10 @@ import { clamp, intersects, lerp } from "./math.js";
 import { getBuildRating } from "./progression.js";
 import { calculateLiveScore, getCollisionPenalty } from "./scoring.js";
 
+const CONTACT_LIMIT = 2;
+const BOUNCE_DURATION = 1.5;
+const BOUNCE_DISTANCE = 0.92;
+
 export function updateRunState(state, input, dt) {
   if (!state.run) return state;
 
@@ -19,7 +23,6 @@ export function updateRunState(state, input, dt) {
   updateShooters(run, delta);
   updateBosses(run, delta);
   resolveBulletHits(run);
-  resolveSolidWallContacts(run);
   resolveEnemyProjectileHits(run);
   resolveTargetCollisions(run);
   resolvePlayerContacts(run);
@@ -46,6 +49,20 @@ function updatePlayer(run, input, dt) {
 
   run.player.targetX = clamp(run.player.targetX, -TRACK.halfWidth + 0.6, TRACK.halfWidth - 0.6);
   run.player.x = lerp(run.player.x, run.player.targetX, dt * 14);
+  updatePlayerRecoil(run, dt);
+}
+
+function updatePlayerRecoil(run, dt) {
+  run.player.recoilTimer = Math.max(0, (run.player.recoilTimer ?? 0) - dt);
+
+  if (run.player.recoilTimer <= 0) {
+    run.player.recoilZ = 0;
+    return;
+  }
+
+  const duration = run.player.recoilDuration ?? BOUNCE_DURATION;
+  const ratio = clamp(run.player.recoilTimer / duration, 0, 1);
+  run.player.recoilZ = BOUNCE_DISTANCE * Math.sin(ratio * Math.PI * 0.5);
 }
 
 function updateWeapons(run, dt) {
@@ -132,6 +149,9 @@ function moveActors(run, dt) {
 
 function getEntitySpeed(run, entity) {
   if (entity.type === ENTITY.BOSS) return Math.max(1.5, run.profile.speed - entity.retreatSpeed);
+  if (entity.enemyKind === "sprinter") return run.profile.speed * 1.12;
+  if (entity.enemyKind === "shield") return run.profile.speed * 0.96;
+  if (entity.enemyKind === "brute") return run.profile.speed * 0.86;
   return run.profile.speed;
 }
 
@@ -218,6 +238,7 @@ function damageTarget(run, bullet, target) {
   target.health -= bullet.damage;
   bullet.active = false;
   addDamageNumber(run, bullet, target);
+  applyAmmoDamageReward(run, bullet, target);
 
   if (target.type === ENTITY.GATE && target.health <= 0) {
     breakGate(run, target);
@@ -236,7 +257,7 @@ function breakGate(run, target) {
   target.active = false;
 
   if (target.gateType === "debuff") {
-    run.messages.push({ id: `safe-${target.id}`, text: "Debuff cleared", tone: "buff", ttl: 1.2 });
+    run.messages.push({ id: `safe-${target.id}`, text: t(run.locale, "message.debuffCleared"), tone: "buff", ttl: 1.2 });
   }
 }
 
@@ -249,6 +270,35 @@ function addDamageNumber(run, bullet, target) {
     value: Math.round(bullet.damage),
     x: target.x,
     y: getDamageHeight(target),
+    z: target.z,
+    ttl,
+    maxTtl: ttl,
+  });
+}
+
+function applyAmmoDamageReward(run, bullet, target) {
+  if (!target.ammoCap || target.value <= 0 || !target.maxHealth) return;
+
+  const damaged = clamp((target.maxHealth - Math.max(0, target.health)) / target.maxHealth, 0, 1);
+  const earnedTotal = Math.min(target.ammoCap, Math.floor(target.ammoCap * damaged));
+  const award = earnedTotal - (target.ammoEarned ?? 0);
+  if (award <= 0) return;
+
+  target.ammoEarned = earnedTotal;
+  run.player.ammo += award;
+  run.messages.push({ id: `ammo-${target.id}-${bullet.id}`, text: t(run.locale, "message.ammoEarned", { value: award }), tone: "buff", ttl: 1.1 });
+  addAmmoGainNumber(run, award, target);
+}
+
+function addAmmoGainNumber(run, value, target) {
+  const ttl = 0.72;
+  run.damageNumbers.push({
+    id: run.nextId++,
+    text: t(run.locale, "message.ammoEarned", { value }),
+    tone: "buff",
+    value,
+    x: target.x,
+    y: getDamageHeight(target) + 0.32,
     z: target.z,
     ttl,
     maxTtl: ttl,
@@ -275,6 +325,7 @@ function resolvePlayerContacts(run) {
     if (canCollect && intersects(playerBox, entity)) {
       entity.collected = true;
       entity.active = false;
+      triggerPlayerBounce(run);
       applyContactEffect(run, entity);
     }
   });
@@ -285,29 +336,34 @@ function resolveTargetCollisions(run) {
 
   run.entities.forEach((entity) => {
     if (!isPenaltyTarget(entity) || !intersects(playerBox, entity)) return;
+    collideWithTarget(run, entity);
+  });
+}
+
+function collideWithTarget(run, entity) {
+  const contactHit = (entity.contactHits ?? 0) + 1;
+  const key = contactHit >= CONTACT_LIMIT ? "message.collisionPass" : "message.collisionBounce";
+  entity.contactHits = contactHit;
+  applyScorePenalty(run, getCollisionPenalty(entity, run.level, contactHit), key, entity);
+
+  if (contactHit >= CONTACT_LIMIT) {
     entity.active = false;
-    applyScorePenalty(run, getCollisionPenalty(entity, run.level), "message.collision", entity);
-  });
+    return;
+  }
+
+  bounceTarget(run, entity);
 }
 
-function resolveSolidWallContacts(run) {
-  const playerBox = { x: run.player.x, z: TRACK.playerZ, width: 0.5, depth: TRACK.contactZ };
-
-  run.entities.forEach((entity) => {
-    if (entity.type !== ENTITY.SOLID_WALL || !entity.active || !intersects(playerBox, entity)) return;
-    pushPlayerFromWall(run, entity);
-  });
+function bounceTarget(run, entity) {
+  const separationZ = TRACK.contactZ + entity.depth + run.profile.speed * BOUNCE_DURATION + 0.35;
+  entity.z = Math.max(entity.z, separationZ);
+  triggerPlayerBounce(run);
 }
 
-function pushPlayerFromWall(run, wall) {
-  const leftEdge = wall.x - wall.width - 0.56;
-  const rightEdge = wall.x + wall.width + 0.56;
-  const nextX = run.player.x < wall.x ? leftEdge : rightEdge;
-  run.player.x = clamp(nextX, -TRACK.halfWidth + 0.6, TRACK.halfWidth - 0.6);
-  run.player.targetX = run.player.x;
-  if (wall.collided) return;
-  wall.collided = true;
-  applyScorePenalty(run, getCollisionPenalty(wall, run.level), "message.wall", wall);
+function triggerPlayerBounce(run) {
+  run.player.recoilDuration = BOUNCE_DURATION;
+  run.player.recoilTimer = BOUNCE_DURATION;
+  run.player.recoilZ = BOUNCE_DISTANCE;
 }
 
 function resolveEnemyProjectileHits(run) {
@@ -341,7 +397,7 @@ function isContactEntity(entity) {
 }
 
 function isPenaltyTarget(entity) {
-  const targets = [ENTITY.ENEMY, ENTITY.BARRICADE, ENTITY.SHOOTER, ENTITY.FINISH_BLOCK, ENTITY.BOSS];
+  const targets = [ENTITY.ENEMY, ENTITY.BARRICADE, ENTITY.SOLID_WALL, ENTITY.SHOOTER, ENTITY.FINISH_BLOCK, ENTITY.BOSS];
   return targets.includes(entity.type) && entity.active && entity.health > 0;
 }
 

@@ -8,7 +8,7 @@ import { getNextUnlock } from "../game/simulation/progression.js";
 import { icon } from "./icons.js";
 
 const STAT_ORDER = ["fireRate", "range", "ammo", "power", "income", "doubleWeapon", "assistants"];
-const WIKI_ITEMS = ["enemies", "health", "buffs", "debuffs", "boss"];
+const WIKI_ITEMS = ["enemies", "variants", "health", "collision", "ammo", "duration", "buffs", "debuffs", "boss"];
 
 export function createHud(root, callbacks) {
   root.innerHTML = createShell();
@@ -245,10 +245,11 @@ function renderInfo(state) {
 }
 
 function renderWikiItem(item, locale) {
-  const iconId = item === "boss" ? "boss" : item === "enemies" ? "enemy" : "info";
+  const iconId = item === "boss" ? "boss" : item === "enemies" ? "enemy" : item === "ammo" ? "ammo" : "info";
   return `
     <article class="wiki-card">
-      <h3>${icon(iconId)} ${t(locale, `info.${item}`)}</h3>
+      <h3>${icon(iconId)} ${t(locale, `info.${item}Title`)}</h3>
+      <p>${t(locale, `info.${item}`)}</p>
     </article>
   `;
 }

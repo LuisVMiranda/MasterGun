@@ -1,8 +1,9 @@
-import { getProfileForLevel } from "../content/levelProfiles.js";
+import { getProfileForLevel, getTargetDurationSeconds } from "../content/levelProfiles.js";
 
 export function getProgressionBand(level) {
-  if (level >= 21) return "late";
-  if (level >= 9) return "mid";
+  if (level >= 151) return "elite";
+  if (level >= 81) return "late";
+  if (level >= 21) return "mid";
   return "early";
 }
 
@@ -10,14 +11,17 @@ export function getLevelProfile(level) {
   const profile = getProfileForLevel(level);
   const band = getProgressionBand(level);
   const challenge = level % 5 === 0;
+  const speed = challenge ? Number((profile.speed * 0.78).toFixed(2)) : profile.speed;
+  const targetDuration = getTargetDurationSeconds(level);
 
   return {
     ...profile,
     level,
     band,
     challenge,
-    speed: challenge ? Number((profile.speed * 0.78).toFixed(2)) : profile.speed,
-    trackLength: challenge ? profile.trackLength + 28 : profile.trackLength,
+    speed,
+    targetDuration,
+    trackLength: Math.round(speed * targetDuration),
   };
 }
 

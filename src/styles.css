@@ -105,6 +105,7 @@ button {
   font-size: 1.06rem;
   font-weight: 800;
   text-align: center;
+  white-space: nowrap;
 }
 
 .cash {
@@ -218,16 +219,14 @@ button {
 .toast.debuff {
   color: var(--red);
 }
-
 .toast.cash {
   color: var(--gold);
 }
-
 .overlay {
   inset: 0;
   display: none;
   place-items: center;
-  padding: 18px;
+  padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
   background: rgba(5, 10, 18, 0.28);
   pointer-events: none;
 }
@@ -265,12 +264,12 @@ p {
 }
 
 h1 {
-  font-size: clamp(2.4rem, 7vw, 5.2rem);
+  font-size: 5rem;
   line-height: 0.95;
 }
 
 h2 {
-  font-size: clamp(1.5rem, 4vw, 2.6rem);
+  font-size: 2.55rem;
 }
 
 h3 {
@@ -433,6 +432,8 @@ h3 {
 }
 
 .wiki-card {
+  display: grid;
+  gap: 8px;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 14px;
@@ -466,7 +467,10 @@ h3 {
 @media (max-width: 720px) {
   .top-hud {
     left: 12px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     width: calc(100% - 24px);
+    gap: 6px;
     transform: none;
   }
 
@@ -478,10 +482,18 @@ h3 {
     min-width: 0;
     padding: 9px 8px;
     font-size: 0.78rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .icon-button {
+    width: 100%;
+    margin-left: 0;
   }
 
   .locale-select {
-    max-width: 74px;
+    width: 100%;
+    max-width: none;
     font-size: 0.78rem;
   }
 
@@ -494,7 +506,7 @@ h3 {
   }
 
   .message-stack {
-    top: 68px;
+    top: 108px;
     width: min(280px, calc(100% - 24px));
   }
 
@@ -504,5 +516,84 @@ h3 {
 
   .wiki-grid {
     grid-template-columns: 1fr;
+  }
+
+  .overlay {
+    align-items: start;
+    padding-top: 108px;
+  }
+  .panel {
+    max-height: calc(100dvh - 128px);
+  }
+  h1 {
+    font-size: 3rem;
+  }
+  h2 {
+    font-size: 1.85rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .hud-chip,
+  .locale-select {
+    font-size: 0.72rem;
+  }
+
+  .stat-stack {
+    grid-template-columns: repeat(2, minmax(70px, 1fr));
+    width: calc(100% - 24px);
+  }
+  .menu-panel,
+  .pause-panel,
+  .shop-panel,
+  .info-panel {
+    padding: 16px;
+  }
+}
+
+@media (max-height: 620px) {
+  .panel {
+    max-height: calc(100dvh - 24px);
+  }
+
+  .menu-panel,
+  .pause-panel {
+    gap: 12px;
+    padding: 18px;
+  }
+
+  h1 {
+    font-size: 3.4rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .top-hud {
+    width: min(1120px, calc(100% - 32px));
+  }
+
+  .stat-stack {
+    width: 190px;
+  }
+
+  .hud-chip,
+  .toast {
+    font-size: 1.1rem;
+  }
+}
+
+@media (min-width: 1900px) {
+  .top-hud {
+    width: min(1240px, calc(100% - 48px));
+  }
+
+  .stat-stack {
+    right: 24px;
+    width: 208px;
+  }
+
+  .progress-strip {
+    right: 24px;
+    left: 24px;
   }
 }

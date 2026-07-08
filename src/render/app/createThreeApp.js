@@ -37,6 +37,7 @@ function bindResize(host, renderer, camera) {
     const rect = host.getBoundingClientRect();
     const width = Math.max(1, rect.width);
     const height = Math.max(1, rect.height);
+    updateCameraForViewport(camera, width, height);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     renderer.setSize(width, height, false);
@@ -46,6 +47,16 @@ function bindResize(host, renderer, camera) {
   observer.observe(host);
   resize();
   return () => observer.disconnect();
+}
+
+function updateCameraForViewport(camera, width, height) {
+  const aspect = width / height;
+  const narrow = aspect < 0.82;
+  const wide = aspect > 1.9;
+
+  camera.fov = narrow ? 62 : wide ? 50 : 54;
+  camera.position.y = narrow ? 9.4 : wide ? 8 : 8.4;
+  camera.position.z = narrow ? -14.8 : wide ? -12.6 : -13;
 }
 
 function bindContextEvents(canvas) {

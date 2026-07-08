@@ -29,6 +29,8 @@ export const TRACK = Object.freeze({
   tileLength: 3.4,
 });
 
+export const TARGET_SCALE = 1.15;
+
 export const STAT_LABELS = Object.freeze({
   fireRate: "Fire Rate",
   range: "Range",

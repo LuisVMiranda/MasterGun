@@ -16,6 +16,11 @@ export function applyContactEffect(run, entity) {
   }
 
   if (entity.type === ENTITY.PICKUP) {
+    if (isPositiveAmmoBank(entity)) {
+      run.messages.push(createMessage(t(run.locale, "message.ammoBanked", { value: entity.ammoEarned ?? 0, cap: entity.ammoCap }), "buff"));
+      return;
+    }
+
     addModifier(run, entity.stat, entity.value);
     run.messages.push(createMessage(t(run.locale, "message.pickup", { stat: tStat(run.locale, entity.stat), value: entity.value }), "buff"));
     return;
@@ -48,6 +53,11 @@ export function pruneMessages(run, dt) {
 }
 
 function applyGate(run, entity) {
+  if (isPositiveAmmoBank(entity)) {
+    run.messages.push(createMessage(t(run.locale, "message.ammoBanked", { value: entity.ammoEarned ?? 0, cap: entity.ammoCap }), "buff"));
+    return;
+  }
+
   addModifier(run, entity.stat, entity.value);
   run.messages.push(createMessage(entity.label, entity.gateType));
 }
@@ -67,6 +77,10 @@ function applyWeapon(run, weaponId) {
   run.stats = buildStats(run.upgradesSnapshot ?? {}, run.modifiers, weapon.id);
   run.player.ammo = Math.max(run.player.ammo, Math.round(run.stats.ammo * 0.45));
   run.messages.push(createMessage(t(run.locale, "message.weapon", { name: t(run.locale, weapon.labelKey) }), "buff"));
+}
+
+function isPositiveAmmoBank(entity) {
+  return entity.stat === "ammo" && entity.value > 0 && entity.ammoCap;
 }
 
 function createMessage(text, tone) {

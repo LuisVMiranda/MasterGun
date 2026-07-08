@@ -7,6 +7,16 @@ const shared = {
   bulletMaterial: new THREE.MeshStandardMaterial({ color: "#1558ff", emissive: "#164aff", emissiveIntensity: 0.8 }),
   enemyBulletMaterial: new THREE.MeshStandardMaterial({ color: "#ff3451", emissive: "#ff133d", emissiveIntensity: 1 }),
   cashMaterial: new THREE.MeshStandardMaterial({ color: COLORS.cash, roughness: 0.35 }),
+  stickHeadGeometry: new THREE.SphereGeometry(0.22, 14, 10),
+  stickLimbGeometry: new THREE.CylinderGeometry(0.045, 0.055, 0.82, 8),
+  stickTorsoGeometry: new THREE.CylinderGeometry(0.075, 0.095, 0.88, 10),
+  stickMaterials: {
+    runner: new THREE.MeshStandardMaterial({ color: "#ff3451", roughness: 0.5 }),
+    sprinter: new THREE.MeshStandardMaterial({ color: "#ff5a49", roughness: 0.45 }),
+    shield: new THREE.MeshStandardMaterial({ color: "#c92343", roughness: 0.6 }),
+    brute: new THREE.MeshStandardMaterial({ color: "#a71935", roughness: 0.62 }),
+    gear: new THREE.MeshStandardMaterial({ color: "#1b2230", metalness: 0.45, roughness: 0.25 }),
+  },
 };
 
 export function createPlayerObject() {
@@ -142,19 +152,14 @@ function createGatePlanks(gateType) {
 }
 
 function createEnemyObject(entity) {
-  const group = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.SphereGeometry(0.42, 18, 14),
-    new THREE.MeshStandardMaterial({ color: "#2e8dff", roughness: 0.38, metalness: 0.08 }),
-  );
-  const label = createLabelSprite(entity.label, { background: "#ffffff", foreground: "#273248", scaleX: 1.16, scaleY: 0.48, fontSize: 82 });
+  const group = createStickman(entity.enemyKind ?? "runner", getEnemyScale(entity));
+  const label = createLabelSprite(entity.label, { background: "#ffffff", foreground: "#273248", scaleX: 1.18, scaleY: 0.5, fontSize: 86 });
   const health = createHealthBar(COLORS.buff);
-  body.castShadow = true;
-  label.position.set(0, 1.46, 0);
-  health.position.set(0, 1.04, 0);
-  group.add(body, health, label);
+  addEnemyVariantGear(group, entity.enemyKind);
+  label.position.set(0, 1.86 * getEnemyScale(entity), 0);
+  health.position.set(0, 1.45 * getEnemyScale(entity), 0);
+  group.add(health, label);
   attachHealthBar(group, health);
-  group.userData.healthLabel = label;
   return group;
 }
 
@@ -197,24 +202,19 @@ function createSolidWallObject(entity) {
 }
 
 function createShooterObject(entity) {
-  const group = new THREE.Group();
-  const color = entity.shooterKind === "walker" ? "#ff914d" : "#ff3451";
-  const body = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.38, 0.48, 0.95, 18),
-    new THREE.MeshStandardMaterial({ color, roughness: 0.42, metalness: 0.18 }),
-  );
+  const group = createStickman(entity.shooterKind === "walker" ? "sprinter" : "runner", 1.12);
+  const color = entity.shooterKind === "walker" ? "#ff5a49" : COLORS.debuff;
   const label = createLabelSprite(entity.label, { background: color, scaleX: 1.45, scaleY: 0.56, fontSize: 66 });
   const health = createHealthBar(COLORS.buff);
   const barrel = new THREE.Mesh(
     new THREE.CylinderGeometry(0.08, 0.11, 0.76, 12),
-    new THREE.MeshStandardMaterial({ color: "#202735", metalness: 0.5, roughness: 0.26 }),
+    shared.stickMaterials.gear,
   );
   barrel.rotation.x = Math.PI / 2;
-  barrel.position.set(0, 0.62, -0.45);
-  body.position.y = 0.5;
-  label.position.set(0, 1.72, 0);
-  health.position.set(0, 1.3, 0);
-  group.add(body, barrel, health, label);
+  barrel.position.set(0, 0.94, -0.46);
+  label.position.set(0, 2.02, 0);
+  health.position.set(0, 1.58, 0);
+  group.add(barrel, health, label);
   attachHealthBar(group, health);
   return group;
 }
@@ -286,11 +286,7 @@ function createFinishBlockObject(entity) {
 }
 
 function createBossObject(entity) {
-  const group = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.85, 1.05, 1.45, 24),
-    new THREE.MeshStandardMaterial({ color: "#7b2738", roughness: 0.42, metalness: 0.18 }),
-  );
+  const group = createStickman("brute", 1.8);
   const crown = new THREE.Mesh(
     new THREE.ConeGeometry(0.72, 0.7, 5),
     new THREE.MeshStandardMaterial({ color: COLORS.warning, emissive: "#6f4100", emissiveIntensity: 0.28 }),
@@ -301,15 +297,69 @@ function createBossObject(entity) {
   );
   const label = createLabelSprite(entity.label, { background: COLORS.debuff, scaleX: 1.62, scaleY: 0.62, fontSize: 74 });
   const health = createHealthBar(COLORS.debuff);
-  body.position.y = 0.72;
-  crown.position.y = 1.78;
+  crown.position.y = 2.68;
   barrel.rotation.x = Math.PI / 2;
-  barrel.position.set(0, 0.92, -0.72);
-  health.position.set(0, 2.1, 0);
-  label.position.set(0, 2.58, 0);
-  group.add(body, crown, barrel, health, label);
+  barrel.position.set(0, 1.42, -0.72);
+  health.position.set(0, 3.02, 0);
+  label.position.set(0, 3.48, 0);
+  group.add(crown, barrel, health, label);
   attachHealthBar(group, health);
   return group;
+}
+
+function createStickman(kind, scale = 1) {
+  const group = new THREE.Group();
+  const bodyGroup = new THREE.Group();
+  const material = shared.stickMaterials[kind] ?? shared.stickMaterials.runner;
+  const torso = new THREE.Mesh(shared.stickTorsoGeometry, material);
+  const head = new THREE.Mesh(shared.stickHeadGeometry, material);
+  const limbs = createStickmanLimbs(material, scale);
+
+  torso.position.y = 0.94;
+  head.position.y = 1.5;
+  bodyGroup.scale.setScalar(scale);
+  bodyGroup.add(torso, head, ...limbs);
+  bodyGroup.traverse((child) => {
+    child.castShadow = true;
+  });
+  group.add(bodyGroup);
+  group.userData.stickman = { limbs };
+  return group;
+}
+
+function createStickmanLimbs(material, scale) {
+  return [
+    createLimb(material, -0.23, 1.05, 0.55, 0.36),
+    createLimb(material, 0.23, 1.05, -0.55, -0.36),
+    createLimb(material, -0.16, 0.36, -0.25, -0.18),
+    createLimb(material, 0.16, 0.36, 0.25, 0.18),
+  ].map((limb) => {
+    limb.scale.y = scale > 1.4 ? 1.08 : 1;
+    return limb;
+  });
+}
+
+function createLimb(material, x, y, rotationZ, rotationX) {
+  const limb = new THREE.Mesh(shared.stickLimbGeometry, material);
+  limb.position.set(x, y, 0);
+  limb.rotation.set(rotationX, 0, rotationZ);
+  limb.userData.baseRotation = { x: rotationX, z: rotationZ };
+  return limb;
+}
+
+function addEnemyVariantGear(group, enemyKind) {
+  if (enemyKind !== "shield") return;
+
+  const shield = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.68, 0.08), shared.stickMaterials.gear);
+  shield.position.set(0.35, 0.95, -0.12);
+  shield.rotation.z = -0.18;
+  group.add(shield);
+}
+
+function getEnemyScale(entity) {
+  if (entity.enemyKind === "brute") return 1.34;
+  if (entity.enemyKind === "sprinter") return 0.92;
+  return 1;
 }
 
 function createHealthBar(color) {

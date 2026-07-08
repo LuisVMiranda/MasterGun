@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { TARGET_SCALE } from "../../game/content/constants.js";
 import { createThreeApp } from "../app/createThreeApp.js";
 import { createAssistantObject, createBulletObject, createDamageNumberObject } from "../objects/actors.js";
 import { createEntityObject, createPlayerObject } from "../objects/actors.js";
@@ -33,7 +34,8 @@ export function createRenderBridge(host) {
 
 function updatePlayer(player, assistants, run) {
   const x = run?.player.x ?? 0;
-  player.position.set(x, 0.08, 0);
+  const recoilZ = run?.player.recoilZ ?? 0;
+  player.position.set(x, 0.08, -recoilZ);
   player.rotation.z = -x * 0.04;
   syncAssistants(assistants, run);
 }
@@ -63,6 +65,7 @@ function syncEntities(scene, meshes, entities) {
   entities.forEach((entity) => {
     const mesh = getEntityMesh(scene, meshes, entity);
     mesh.position.set(entity.x, 0, entity.z);
+    mesh.scale.setScalar(mesh.userData.baseScale ?? TARGET_SCALE);
     updateHealthObject(mesh, entity);
     animateEntity(mesh, entity);
   });
@@ -72,6 +75,7 @@ function getEntityMesh(scene, meshes, entity) {
   if (meshes.has(entity.id)) return meshes.get(entity.id);
 
   const mesh = createEntityObject(entity);
+  mesh.userData.baseScale = TARGET_SCALE;
   meshes.set(entity.id, mesh);
   scene.add(mesh);
   return mesh;
@@ -145,13 +149,23 @@ function getDamageMesh(scene, meshes, damage) {
 }
 
 function animateEntity(mesh, entity) {
-  if (entity.type === "enemy" || entity.type === "shooter" || entity.type === "boss") {
-    mesh.rotation.y += 0.04;
+  if (mesh.userData.stickman) {
+    animateStickman(mesh, entity);
   }
 
   if (entity.broken) {
-    mesh.scale.y = 0.82;
+    mesh.scale.y = (mesh.userData.baseScale ?? TARGET_SCALE) * 0.82;
   }
+}
+
+function animateStickman(mesh, entity) {
+  const swing = Math.sin(entity.z * 0.7 + entity.id) * 0.25;
+  const limbs = mesh.userData.stickman.limbs;
+  limbs.forEach((limb, index) => {
+    const direction = index % 2 ? -1 : 1;
+    limb.rotation.x = limb.userData.baseRotation.x + swing * direction;
+    limb.rotation.z = limb.userData.baseRotation.z + swing * direction * 0.35;
+  });
 }
 
 function updateCamera(camera, run) {

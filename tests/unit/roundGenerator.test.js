@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { ENTITY } from "../../src/game/content/constants.js";
-import { LEVEL_PROFILES } from "../../src/game/content/levelProfiles.js";
+import { ENTITY, LANES, TARGET_SCALE } from "../../src/game/content/constants.js";
+import { LEVEL_PROFILES, getTargetDurationSeconds } from "../../src/game/content/levelProfiles.js";
 import { createRoundPlan } from "../../src/game/simulation/roundGenerator.js";
+import { getLevelProfile } from "../../src/game/simulation/progression.js";
 
 describe("createRoundPlan", () => {
   it("creates repeatable rounds from the same seed", () => {
-    const first = createRoundPlan(10, 1234);
-    const second = createRoundPlan(10, 1234);
+    const first = createRoundPlan(30, 1234);
+    const second = createRoundPlan(30, 1234);
 
     expect(first.entities).toEqual(second.entities);
     expect(first.profile.band).toBe("mid");
@@ -23,16 +24,72 @@ describe("createRoundPlan", () => {
     expect(finishBlocks.length).toBeGreaterThan(8);
   });
 
-  it("projects at least 30 distinct levels with growing pressure", () => {
+  it("projects 200 levels with growing pressure and capped duration", () => {
     const first = LEVEL_PROFILES[0];
-    const last = LEVEL_PROFILES[29];
-    const lengths = LEVEL_PROFILES.map((profile) => profile.trackLength);
+    const last = LEVEL_PROFILES[199];
+    const durations = [1, 9, 10, 20, 170, 180, 200].map(getTargetDurationSeconds);
 
-    expect(LEVEL_PROFILES).toHaveLength(30);
+    expect(LEVEL_PROFILES).toHaveLength(200);
     expect(last.trackLength).toBeGreaterThan(first.trackLength);
-    expect(Math.max(...lengths) - Math.min(...lengths)).toBeGreaterThan(250);
     expect(last.shooters + last.walkers + last.walls).toBeGreaterThan(first.shooters + first.walkers + first.walls);
     expect(last.baseReward / last.difficulty).toBeLessThan(100);
+    expect(durations).toEqual([30, 30, 35, 40, 115, 120, 120]);
+  });
+
+  it("keeps generated run durations aligned to the target curve", () => {
+    [1, 10, 20, 75, 120, 180, 200].forEach((level) => {
+      const profile = getLevelProfile(level);
+      const duration = profile.trackLength / profile.speed;
+
+      expect(duration).toBeGreaterThanOrEqual(profile.targetDuration - 0.08);
+      expect(duration).toBeLessThanOrEqual(120.08);
+    });
+  });
+
+  it("makes first-run enemies beatable with about two starter pistol shots", () => {
+    const plan = createRoundPlan(1, 123);
+    const enemies = plan.entities.filter((entity) => entity.type === ENTITY.ENEMY);
+
+    expect(enemies[0].health).toBeLessThanOrEqual(12);
+    expect(enemies[0].health).toBeGreaterThanOrEqual(10);
+  });
+
+  it("spreads active targets across early, mid, and late runway sections", () => {
+    [1, 40, 120, 200].forEach((level) => {
+      const plan = createRoundPlan(level, 4040 + level);
+      const targets = plan.entities.filter((entity) => entity.type !== ENTITY.FINISH_BLOCK);
+      const spread = Math.max(...targets.map((entity) => entity.z)) - Math.min(...targets.map((entity) => entity.z));
+      const sections = countRunwaySections(targets, plan.profile.trackLength);
+
+      expect(spread).toBeGreaterThan(plan.profile.trackLength * 0.62);
+      expect(sections.every((count) => count > 0)).toBe(true);
+    });
+  });
+
+  it("uses irregular lane placement instead of only fixed lane patterns", () => {
+    const plan = createRoundPlan(80, 8080);
+    const offLaneTargets = plan.entities.filter((entity) => !LANES.some((lane) => Math.abs(lane - entity.x) < 0.04));
+
+    expect(offLaneTargets.length).toBeGreaterThan(plan.entities.length * 0.55);
+  });
+
+  it("scales generated target hit boxes by the visibility scale", () => {
+    const plan = createRoundPlan(5, 5050);
+    const enemy = plan.entities.find((entity) => entity.type === ENTITY.ENEMY);
+    const pickup = plan.entities.find((entity) => entity.type === ENTITY.PICKUP);
+
+    expect(enemy.width).toBeCloseTo(0.5 * TARGET_SCALE);
+    expect(enemy.depth).toBeCloseTo(0.5 * TARGET_SCALE);
+    expect(pickup.width).toBeCloseTo(0.62 * TARGET_SCALE);
+  });
+
+  it("generates diverse enemy variants in late projected levels", () => {
+    const plans = [120, 160, 200].map((level) => createRoundPlan(level, 700 + level));
+    const variants = new Set(plans.flatMap((plan) => plan.entities.filter((entity) => entity.type === ENTITY.ENEMY).map((entity) => entity.enemyKind)));
+
+    expect(variants.has("runner")).toBe(true);
+    expect(variants.has("sprinter") || variants.has("shield")).toBe(true);
+    expect(variants.has("brute")).toBe(true);
   });
 
   it("adds walls, blocked routes, still shooters, and walking shooters", () => {
@@ -83,4 +140,15 @@ function getBuffStats(plans) {
     .flatMap((plan) => plan.entities)
     .filter((entity) => entity.type === ENTITY.GATE && entity.gateType === "buff")
     .map((entity) => entity.stat);
+}
+
+function countRunwaySections(targets, trackLength) {
+  return targets.reduce(
+    (sections, entity) => {
+      const index = Math.min(2, Math.floor((entity.z / trackLength) * 3));
+      sections[Math.max(0, index)] += 1;
+      return sections;
+    },
+    [0, 0, 0],
+  );
 }

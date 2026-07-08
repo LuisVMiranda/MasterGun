@@ -11,7 +11,7 @@ describe("property batches", () => {
   });
 
   it("keeps checkpoint cadence exclusive to every fifth level", () => {
-    range(1, 30).forEach(assertCheckpointCadence);
+    range(1, 200).forEach(assertCheckpointCadence);
   });
 
   it("keeps live score non-negative under broad penalty values", () => {
@@ -24,7 +24,7 @@ describe("property batches", () => {
 });
 
 function planCases() {
-  return range(1, 30).flatMap((level) => [11, 29, 47, 83].map((seed) => [level, seed]));
+  return range(1, 200).flatMap((level) => [11, 47].map((seed) => [level, seed]));
 }
 
 function assertValidPlan(plan) {

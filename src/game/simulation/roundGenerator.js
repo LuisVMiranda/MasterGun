@@ -1,25 +1,29 @@
-import { ENTITY, LANES } from "../content/constants.js";
+import { ENTITY, LANES, TARGET_SCALE, TRACK } from "../content/constants.js";
 import { t, tStat } from "../content/i18n.js";
 import { getPickupWeapon } from "../content/weapons.js";
-import { choose } from "./math.js";
+import { choose, clamp } from "./math.js";
 import { getLevelProfile } from "./progression.js";
 import { createSeededRandom } from "./random.js";
 
 const COMMON_BUFFS = Object.freeze(["fireRate", "range", "ammo", "power"]);
 const RARE_BUFFS = Object.freeze(["doubleWeapon", "assistants"]);
 const DEBUFFS = Object.freeze(["fireRate", "range", "ammo", "power"]);
+const START_Z = 12;
+const FINISH_BUFFER = 18;
+const TARGET_MARGIN = 0.78;
 
 export function createRoundPlan(level, seed, locale = "en") {
   const profile = getLevelProfile(level);
   const random = createSeededRandom(seed);
-  const cursor = { id: 1, z: 12 };
+  const cursor = { id: 1, z: START_Z };
   const entities = [];
   const context = { random, profile, locale };
 
   addOpeningTargets(entities, cursor, random, profile);
-  addChallengeEvents(entities, cursor, context);
   addGateSequence(entities, cursor, context);
+  addChallengeEvents(entities, cursor, context);
   addFinishLadder(entities, cursor, profile);
+  entities.sort(sortByDistance);
 
   return {
     seed,
@@ -29,12 +33,60 @@ export function createRoundPlan(level, seed, locale = "en") {
   };
 }
 
+function createPathSlots(profile, random) {
+  const startZ = Math.min(START_Z + 24, getGameplayEnd(profile) - 12);
+  return createSegmentSlots(profile.gateCount, startZ, getGameplayEnd(profile), random);
+}
+
+function createSegmentSlots(count, startZ, endZ, random) {
+  if (count <= 0) return [];
+
+  const span = Math.max(1, endZ - startZ);
+  const spacing = span / count;
+
+  return Array.from({ length: count }, (_, index) => {
+    const center = startZ + spacing * (index + 0.5);
+    const wave = Math.sin((index + 1) * 1.91) * spacing * 0.2;
+    const jitter = randomOffset(random, Math.min(spacing * 0.32, 6.5));
+    return Number(clamp(center + wave + jitter, startZ, endZ).toFixed(2));
+  }).sort((a, b) => a - b);
+}
+
+function getGameplayEnd(profile) {
+  return Math.max(START_Z + 44, profile.trackLength - (profile.finishRows * 2.2 + FINISH_BUFFER));
+}
+
+function chooseTargetX(random) {
+  const x = choose(LANES, random) + randomOffset(random, 0.52);
+  return Number(clamp(x, -TRACK.halfWidth + TARGET_MARGIN, TRACK.halfWidth - TARGET_MARGIN).toFixed(2));
+}
+
+function createGateLanes(random) {
+  const left = -2.95 + random() * 1.15;
+  const right = 1.8 + random() * 1.15;
+  return random() > 0.5 ? [left, right] : [right, left];
+}
+
+function getPressureOffset(random) {
+  if (random() > 0.72) return -(1.8 + random() * 1.4);
+  return 2.35 + random() * 3.15;
+}
+
+function randomOffset(random, amount) {
+  return (random() - 0.5) * amount * 2;
+}
+
+function sortByDistance(first, second) {
+  return first.z - second.z || first.id - second.id;
+}
+
 function addOpeningTargets(entities, cursor, random, profile) {
-  const count = Math.min(profile.enemyCount, profile.band === "early" ? 5 : 8);
+  const count = Math.min(profile.enemyCount, profile.band === "early" ? 3 : 4);
+  const endZ = Math.min(getGameplayEnd(profile) * 0.25, START_Z + 54);
+  const slots = createSegmentSlots(count, START_Z, endZ, random);
 
   for (let index = 0; index < count; index += 1) {
-    entities.push(createEnemy(cursor, choose(LANES, random), profile.difficulty));
-    cursor.z += 4.6;
+    entities.push(createEnemy(cursor, chooseTargetX(random), profile, slots[index]));
   }
 }
 
@@ -42,31 +94,35 @@ function addChallengeEvents(entities, cursor, context) {
   const { random, profile, locale } = context;
   if (!profile.challenge) return;
 
+  const startZ = Math.min(getGameplayEnd(profile) * 0.24, START_Z + 44);
+  const pickupSlots = createSegmentSlots(5, startZ, startZ + 16, random);
+
   for (let index = 0; index < 5; index += 1) {
     const stat = choose(COMMON_BUFFS, random);
     const value = getPickupValue(stat, profile, index);
-    entities.push(createPickup(cursor, choose(LANES, random), cursor.z + 5 + index * 4.2, { stat, value, locale }));
+    entities.push(createPickup(cursor, chooseTargetX(random), pickupSlots[index], { stat, value, locale }));
   }
 
   const weapon = getPickupWeapon(profile.level, random);
-  entities.push(createWeaponPickup(cursor, choose(LANES, random), cursor.z + 17, weapon, locale));
-  entities.push(createBoss(cursor, 0, cursor.z + 26, profile, locale));
-  cursor.z += 34;
+  entities.push(createWeaponPickup(cursor, chooseTargetX(random), startZ + 13, weapon, locale));
+  entities.push(createBoss(cursor, randomOffset(random, 1.05), startZ + 16, profile, locale));
 }
 
 function addGateSequence(entities, cursor, context) {
   const { random, profile } = context;
+  const slots = createPathSlots(profile, random);
+
   for (let index = 0; index < profile.gateCount; index += 1) {
+    cursor.z = slots[index];
     const lanes = addGatePair(entities, cursor, context, index);
     addBlockedUpgrade(entities, cursor, lanes.buffLane, context, index);
     addPressureObject(entities, cursor, context, index);
-    cursor.z += 8 + random() * 4;
   }
 }
 
 function addGatePair(entities, cursor, context, index) {
   const { random, profile, locale } = context;
-  const lane = random() > 0.5 ? [-2.2, 2.2] : [2.2, -2.2];
+  const lane = createGateLanes(random);
   const buff = chooseBuff(random, profile, index);
   const debuff = choose(DEBUFFS, random);
 
@@ -101,39 +157,39 @@ function addBlockedUpgrade(entities, cursor, x, context, index) {
 
 function addPressureObject(entities, cursor, context, index) {
   const { random, profile, locale } = context;
-  const z = cursor.z + 3.2;
+  const z = cursor.z + getPressureOffset(random);
 
   if (index < profile.walls) {
-    entities.push(createSolidWall(cursor, choose(LANES, random), z, profile.difficulty, t(locale, "entity.wall")));
+    entities.push(createSolidWall(cursor, chooseTargetX(random), z, profile.difficulty, t(locale, "entity.wall")));
     return;
   }
 
   if (index < profile.walls + profile.walkers) {
-    entities.push(createShooter(cursor, choose(LANES, random), z, { profile, shooterKind: "walker", locale }));
+    entities.push(createShooter(cursor, chooseTargetX(random), z, { profile, shooterKind: "walker", locale }));
     return;
   }
 
   if (index < profile.walls + profile.walkers + profile.shooters) {
-    entities.push(createShooter(cursor, choose(LANES, random), z, { profile, shooterKind: "still", locale }));
+    entities.push(createShooter(cursor, chooseTargetX(random), z, { profile, shooterKind: "still", locale }));
     return;
   }
 
   if (index < profile.walls + profile.walkers + profile.shooters + profile.barricades) {
-    entities.push(createBarricade(cursor, choose(LANES, random), z, profile.difficulty));
+    entities.push(createBarricade(cursor, chooseTargetX(random), z, profile.difficulty));
     return;
   }
 
   if (profile.level >= 4 && random() < 0.08) {
-    entities.push(createWeaponPickup(cursor, choose(LANES, random), z, getPickupWeapon(profile.level, random), locale));
+    entities.push(createWeaponPickup(cursor, chooseTargetX(random), z, getPickupWeapon(profile.level, random), locale));
     return;
   }
 
   if (profile.band !== "early" && random() < profile.hazardChance) {
-    entities.push(createHazard(cursor, choose(LANES, random), z, profile.difficulty, locale));
+    entities.push(createHazard(cursor, chooseTargetX(random), z, profile.difficulty, locale));
     return;
   }
 
-  entities.push(createEnemy(cursor, choose(LANES, random), profile.difficulty, z));
+  entities.push(createEnemy(cursor, chooseTargetX(random), profile, z));
 }
 
 function addFinishLadder(entities, cursor, profile) {
@@ -149,41 +205,58 @@ function addFinishLadder(entities, cursor, profile) {
 
 function createGate(cursor, x, gateType, stat, details) {
   const { value, locale } = details;
+  const health = gateType === "buff" ? 10 : 16;
   return {
     id: cursor.id++,
     type: ENTITY.GATE,
     x,
     z: cursor.z,
-    width: 1.05,
-    depth: 0.35,
+    width: size(1.05),
+    depth: size(0.35),
     gateType,
     stat,
     value,
     label: `${tStat(locale, stat)} ${formatSigned(value)}`,
-    health: gateType === "buff" ? 10 : 16,
-    maxHealth: gateType === "buff" ? 10 : 16,
+    health,
+    maxHealth: health,
+    ...createAmmoBank(stat, value),
     broken: false,
     active: true,
     collected: false,
   };
 }
 
-function createEnemy(cursor, x, difficulty, z = cursor.z) {
-  const health = Math.round(10 + difficulty * 7);
+function createEnemy(cursor, x, profile, z = cursor.z) {
+  const enemyKind = getEnemyKind(profile, cursor.id);
+  const health = getEnemyHealth(profile, enemyKind);
   return {
     id: cursor.id++,
     type: ENTITY.ENEMY,
+    enemyKind,
     x,
     z,
-    width: 0.5,
-    depth: 0.5,
+    width: size(0.5),
+    depth: size(0.5),
     label: String(health),
     health,
     maxHealth: health,
-    value: Math.round(12 + difficulty * 5),
-    penalty: Math.round(18 + difficulty * 4),
+    value: Math.round(12 + profile.difficulty * 5),
+    penalty: Math.round(18 + profile.difficulty * 4),
     active: true,
   };
+}
+
+function getEnemyKind(profile, seed) {
+  if (profile.level >= 120 && seed % 7 === 0) return "brute";
+  if (profile.level >= 45 && seed % 5 === 0) return "shield";
+  if (profile.level >= 20 && seed % 4 === 0) return "sprinter";
+  return "runner";
+}
+
+function getEnemyHealth(profile, enemyKind) {
+  const base = 8 + profile.difficulty * 3 + Math.max(0, profile.level - 4) * 0.18;
+  const multipliers = { runner: 1, sprinter: 0.85, shield: 1.3, brute: 1.7 };
+  return Math.max(2, Math.round(base * multipliers[enemyKind]));
 }
 
 function createBarricade(cursor, x, z, difficulty) {
@@ -193,8 +266,8 @@ function createBarricade(cursor, x, z, difficulty) {
     type: ENTITY.BARRICADE,
     x,
     z,
-    width: 1.05,
-    depth: 0.55,
+    width: size(1.05),
+    depth: size(0.55),
     label: String(health),
     health,
     maxHealth: health,
@@ -211,8 +284,8 @@ function createSolidWall(cursor, x, z, difficulty, label = "Wall") {
     type: ENTITY.SOLID_WALL,
     x,
     z,
-    width: 0.95,
-    depth: 0.72,
+    width: size(0.95),
+    depth: size(0.72),
     label,
     health,
     maxHealth: health,
@@ -232,8 +305,8 @@ function createShooter(cursor, x, z, details) {
     x,
     originX: x,
     z,
-    width: 0.55,
-    depth: 0.58,
+    width: size(0.55),
+    depth: size(0.58),
     label: shooterKind === "walker" ? t(locale, "entity.walker") : t(locale, "entity.shooter"),
     health,
     maxHealth: health,
@@ -253,8 +326,8 @@ function createHazard(cursor, x, z, difficulty, locale) {
     type: ENTITY.HAZARD,
     x,
     z,
-    width: 0.75,
-    depth: 0.6,
+    width: size(0.75),
+    depth: size(0.6),
     stat: "ammo",
     value,
     label: `${tStat(locale, "ammo")} ${value}`,
@@ -269,8 +342,8 @@ function createFinishBlock(cursor, x, z, health, value) {
     type: ENTITY.FINISH_BLOCK,
     x,
     z,
-    width: 0.75,
-    depth: 0.45,
+    width: size(0.75),
+    depth: size(0.45),
     label: String(value),
     health,
     maxHealth: health,
@@ -282,16 +355,18 @@ function createFinishBlock(cursor, x, z, health, value) {
 
 function createPickup(cursor, x, z, details) {
   const { stat, value, locale } = details;
+  const ammoHealth = getAmmoPickupHealth(stat, value);
   return {
     id: cursor.id++,
     type: ENTITY.PICKUP,
     x,
     z,
-    width: 0.62,
-    depth: 0.54,
+    width: size(0.62),
+    depth: size(0.54),
     stat,
     value,
     label: `${tStat(locale, stat)} +${value}`,
+    ...createAmmoBank(stat, value, ammoHealth),
     active: true,
     collected: false,
   };
@@ -303,8 +378,8 @@ function createWeaponPickup(cursor, x, z, weapon, locale) {
     type: ENTITY.WEAPON_PICKUP,
     x,
     z,
-    width: 0.7,
-    depth: 0.6,
+    width: size(0.7),
+    depth: size(0.6),
     weaponId: weapon.id,
     label: t(locale, weapon.labelKey),
     active: true,
@@ -320,8 +395,8 @@ function createBoss(cursor, x, z, profile, locale) {
     x,
     originX: x,
     z,
-    width: 1.05,
-    depth: 0.95,
+    width: size(1.05),
+    depth: size(0.95),
     label: t(locale, "entity.boss"),
     health,
     maxHealth: health,
@@ -333,6 +408,25 @@ function createBoss(cursor, x, z, profile, locale) {
     penalty: Math.round(55 + profile.level * 2.5),
     active: true,
   };
+}
+
+function size(value) {
+  return Number((value * TARGET_SCALE).toFixed(3));
+}
+
+function createAmmoBank(stat, value, health) {
+  if (stat !== "ammo" || value <= 0) return {};
+  const cap = Math.max(1, Math.round(value));
+  return {
+    ammoCap: cap,
+    ammoEarned: 0,
+    ...(health ? { health, maxHealth: health } : {}),
+  };
+}
+
+function getAmmoPickupHealth(stat, value) {
+  if (stat !== "ammo" || value <= 0) return undefined;
+  return Math.max(6, Math.round(value * 0.55));
 }
 
 function getBuffValue(stat, profile, index) {
