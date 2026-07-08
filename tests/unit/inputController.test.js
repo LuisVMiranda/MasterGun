@@ -3,6 +3,8 @@ import {
   isTextEntryTarget,
   pointerToTrackX,
   readGamepadAxis,
+  readGamepadUiAxisX,
+  readGamepadUiAxisY,
   readKeyboardAxis,
   updateTrackedKey,
 } from "../../src/game/input/inputController.js";
@@ -23,6 +25,13 @@ describe("input direction", () => {
     expect(readKeyboardAxis(new Set(["ArrowLeft"]))).toBeGreaterThan(0);
     expect(readKeyboardAxis(new Set(["ArrowRight"]))).toBeLessThan(0);
     expect(readGamepadAxis({ axes: [-1], buttons: [] })).toBeGreaterThan(0);
+  });
+
+  it("maps controller UI navigation to conventional menu directions", () => {
+    expect(readGamepadUiAxisX({ axes: [1], buttons: [] })).toBe(1);
+    expect(readGamepadUiAxisX({ axes: [0], buttons: createButtons([14]) })).toBe(-1);
+    expect(readGamepadUiAxisY({ axes: [0, 1], buttons: [] })).toBe(1);
+    expect(readGamepadUiAxisY({ axes: [0, 0], buttons: createButtons([12]) })).toBe(-1);
   });
 
   it("does not block profile text entry with movement keys", () => {
@@ -61,4 +70,8 @@ function createKeyEvent(key, target) {
       this.prevented = true;
     },
   };
+}
+
+function createButtons(pressedIndexes) {
+  return Array.from({ length: 16 }, (_, index) => ({ pressed: pressedIndexes.includes(index) }));
 }

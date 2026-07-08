@@ -27,7 +27,7 @@ export function startRun(state, seed = createSeed(state.save.level, state.save.c
     profile: plan.profile,
     distance: 0,
     elapsed: 0,
-    player: { x: 0, targetX: 0, recoilZ: 0, recoilTimer: 0, recoilDuration: 0, shotTimer: 0, assistantTimer: 0, ammo: stats.ammo },
+    player: { x: 0, targetX: 0, recoilZ: 0, recoilTimer: 0, recoilDuration: 0, interruptTimer: 0, shotTimer: 0, assistantTimer: 0, ammo: stats.ammo },
     stats,
     weaponId: stats.weaponId,
     modifiers: {},

@@ -15,6 +15,8 @@ const root = document.querySelector("#app");
 let appState = createAppState(loadSave());
 let lastTime = performance.now();
 let lastSaved = JSON.stringify(appState.save);
+let previousControls = { confirmPressed: false, pausePressed: false, uiAxisX: 0, uiAxisY: 0 };
+let nextUiMoveAt = 0;
 const sfx = createSfx();
 
 const hud = createHud(root, {
@@ -45,10 +47,13 @@ requestAnimationFrame(loop);
 function loop(now) {
   const dt = (now - lastTime) / 1000;
   lastTime = now;
+  const controls = input.read();
+
+  handleInputCommands(controls, now);
 
   if (appState.phase === PHASE.RUNNING) {
     const previousPhase = appState.phase;
-    appState = updateRunState(appState, input.read(), dt);
+    appState = updateRunState(appState, controls, dt);
     playAudioEvents();
     persistIfNeeded();
 
@@ -62,6 +67,7 @@ function loop(now) {
     hud.update(appState);
   }
 
+  previousControls = controls;
   requestAnimationFrame(loop);
 }
 
@@ -101,4 +107,43 @@ function persistIfNeeded() {
     saveGame(appState.save);
     lastSaved = serialized;
   }
+}
+
+function handleInputCommands(controls, now) {
+  if (isPressed(controls.pausePressed, previousControls.pausePressed)) {
+    handlePauseCommand();
+  }
+
+  if (!hud.hasOverlay()) return;
+
+  const direction = getUiMoveDirection(controls);
+  if (direction && now >= nextUiMoveAt) {
+    hud.moveFocus(direction);
+    nextUiMoveAt = now + 180;
+  }
+
+  if (isPressed(controls.confirmPressed, previousControls.confirmPressed)) {
+    hud.activateFocused();
+  }
+}
+
+function handlePauseCommand() {
+  if (appState.ui?.infoOpen) {
+    setState(setInfoOpen(appState, false));
+    return;
+  }
+
+  const phase = appState.phase;
+  if (phase === PHASE.RUNNING) setState(pauseRun(appState));
+  if (phase === PHASE.PAUSED) startOrResume(() => resumeRun(appState));
+}
+
+function getUiMoveDirection(controls) {
+  const vertical = Math.abs(controls.uiAxisY) > 0.6 ? Math.sign(controls.uiAxisY) : 0;
+  const horizontal = Math.abs(controls.uiAxisX) > 0.6 ? Math.sign(controls.uiAxisX) : 0;
+  return vertical || horizontal;
+}
+
+function isPressed(current, previous) {
+  return Boolean(current) && !previous;
 }

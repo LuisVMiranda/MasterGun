@@ -72,13 +72,17 @@ describe("updateRunState", () => {
     const state = startRun(createAppState(createDefaultSave()), 19);
     state.run.player.x = 0;
     state.run.player.targetX = 0;
-    state.run.entities = [createWall()];
+    state.run.distance = 40;
+    state.run.entities = [createWall(), createEnemyTarget({ id: 106, z: 8 })];
 
     updateRunState(state, idleInput, 0.016);
 
     expect(state.run.entities[0].active).toBe(true);
     expect(state.run.entities[0].contactHits).toBe(1);
     expect(state.run.entities[0].z).toBeGreaterThan(state.run.profile.speed * 1.4);
+    expect(state.run.entities[1].z).toBeGreaterThan(16);
+    expect(state.run.distance).toBeLessThan(40);
+    expect(state.run.player.interruptTimer).toBeCloseTo(1.5);
     expect(state.run.player.recoilZ).toBeGreaterThan(0);
     expect(state.run.scorePenalty).toBeGreaterThan(0);
     expect(state.run.messages.at(-1).text).toContain("Bounce");
@@ -129,6 +133,25 @@ describe("updateRunState", () => {
 
     expect(state.run.player.ammo).toBe(4);
     expect(state.run.messages.at(-1).text).toContain("0/18");
+  });
+
+  it("drops enemy cash for runway collection instead of rewarding on kill", () => {
+    const state = startRun(createAppState(createDefaultSave()), 194);
+    state.run.player.shotTimer = 999;
+    state.run.entities = [createEnemyTarget({ z: 3, health: 1, value: 34 })];
+    state.run.bullets = [createPlayerBullet(920, { damage: 8, z: 2.5 })];
+
+    updateRunState(state, idleInput, 0.016);
+    const cash = state.run.entities.find((entity) => entity.type === ENTITY.CASH);
+
+    expect(state.run.destroyedValue).toBe(0);
+    expect(cash.value).toBe(34);
+
+    cash.z = 0;
+    updateRunState(state, idleInput, 0.016);
+
+    expect(state.run.destroyedValue).toBe(34);
+    expect(state.run.player.recoilTimer).toBe(0);
   });
 
   it("lets enemy shots reduce round score without ending the run", () => {
@@ -207,16 +230,17 @@ function createWall() {
   };
 }
 
-function createEnemyTarget() {
+function createEnemyTarget(options = {}) {
   return {
-    id: 103,
+    id: options.id ?? 103,
     type: ENTITY.ENEMY,
     x: 0,
-    z: 0,
+    z: options.z ?? 0,
     width: 1,
     depth: 1,
-    health: 20,
-    maxHealth: 20,
+    health: options.health ?? 20,
+    maxHealth: options.health ?? 20,
+    value: options.value ?? 25,
     penalty: 25,
     active: true,
   };

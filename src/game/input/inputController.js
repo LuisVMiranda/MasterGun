@@ -1,13 +1,15 @@
 import { TRACK } from "../content/constants.js";
 import { clamp } from "../simulation/math.js";
 
-const TRACKED_KEYS = new Set(["ArrowLeft", "ArrowRight", "a", "A", "d", "D", "Escape", "Enter", " "]);
+const TRACKED_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "a", "A", "d", "D", "Escape", "Enter", " "]);
 const TEXT_ENTRY_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
 
 export function createInputController(target) {
   const keys = new Set();
   const state = {
     axisX: 0,
+    uiAxisX: 0,
+    uiAxisY: 0,
     pointerX: 0,
     pointerActive: false,
     confirmPressed: false,
@@ -31,6 +33,8 @@ export function createInputController(target) {
   return {
     read() {
       state.axisX = readKeyboardAxis(keys);
+      state.uiAxisX = readKeyboardUiAxisX(keys);
+      state.uiAxisY = readKeyboardUiAxisY(keys);
       state.pausePressed = keys.has("Escape");
       state.confirmPressed = keys.has("Enter") || keys.has(" ");
       mergeGamepad(state);
@@ -85,6 +89,8 @@ function mergeGamepad(state) {
   if (!pad) return;
 
   const axis = readGamepadAxis(pad);
+  state.uiAxisX = readGamepadUiAxisX(pad);
+  state.uiAxisY = readGamepadUiAxisY(pad);
 
   if (Math.abs(axis) > 0.05) {
     state.axisX = axis;
@@ -104,6 +110,26 @@ export function readGamepadAxis(pad) {
   const stick = pad.axes[0] ?? 0;
   if (Math.abs(stick) > 0.16) return -stick;
   return Number(isButtonPressed(pad, 14)) - Number(isButtonPressed(pad, 15));
+}
+
+export function readGamepadUiAxisX(pad) {
+  const stick = pad.axes[0] ?? 0;
+  if (Math.abs(stick) > 0.42) return Math.sign(stick);
+  return Number(isButtonPressed(pad, 15)) - Number(isButtonPressed(pad, 14));
+}
+
+export function readGamepadUiAxisY(pad) {
+  const stick = pad.axes[1] ?? 0;
+  if (Math.abs(stick) > 0.42) return Math.sign(stick);
+  return Number(isButtonPressed(pad, 13)) - Number(isButtonPressed(pad, 12));
+}
+
+function readKeyboardUiAxisX(keys) {
+  return Number(keys.has("ArrowRight")) - Number(keys.has("ArrowLeft"));
+}
+
+function readKeyboardUiAxisY(keys) {
+  return Number(keys.has("ArrowDown")) - Number(keys.has("ArrowUp"));
 }
 
 function isButtonPressed(pad, index) {

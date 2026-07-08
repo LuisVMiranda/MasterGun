@@ -28,6 +28,7 @@ try {
   await waitForServer(URL);
   const browser = await chromium.launch({ headless: true, executablePath: chromePath });
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  await installGamepadMock(page);
   const messages = [];
   page.on("console", (message) => {
     if (["error", "warning"].includes(message.type())) messages.push(`${message.type()}: ${message.text()}`);
@@ -40,13 +41,19 @@ try {
   if (profileText !== "Dado") throw new Error(`Profile input blocked typed movement keys: ${profileText}`);
 
   await assertLocalizedInfo(page);
-  await page.getByTestId("start-run").click();
+  await pressGamepad(page, 0);
+  await pressGamepad(page, 9);
+  await page.waitForSelector(".pause-panel", { timeout: 2000 });
+  await pressGamepad(page, 0);
   await page.mouse.move(920, 420);
   await page.waitForTimeout(4500);
   await page.mouse.move(360, 420);
   await page.waitForSelector("[data-testid='shop-panel']", { timeout: 62000 });
   await page.screenshot({ path: join(screenshotDir, "shop.png") });
 
+  const cashBeforeBuy = await readCash(page);
+  await pressGamepad(page, 0);
+  const cashAfterBuy = await readCash(page);
   const cashText = await page.getByTestId("cash-chip").textContent();
   const shopText = await page.getByTestId("shop-panel").textContent();
   const upgradeCardCount = await page.locator(".upgrade-card").count();
@@ -55,11 +62,30 @@ try {
   if (!visibleShop || !cashText?.includes("$")) throw new Error("Smoke flow did not reach a cash shop.");
   if (!shopText?.includes("Level Complete")) throw new Error("Shop did not show the completion summary.");
   if (upgradeCardCount !== 2) throw new Error(`Shop showed ${upgradeCardCount} upgrade choices instead of 2.`);
+  if (cashAfterBuy >= cashBeforeBuy) throw new Error("Controller confirm did not purchase a focused upgrade.");
   await assertResponsiveShell(browser);
   await browser.close();
   if (messages.length > 0) throw new Error(`Console issues:\n${messages.join("\n")}`);
 } finally {
   server.kill();
+}
+
+async function installGamepadMock(page) {
+  await page.addInitScript(() => {
+    const buttons = Array.from({ length: 16 }, () => ({ pressed: false }));
+    window.__masterGunPad = { axes: [0, 0], buttons };
+    window.__setMasterGunButton = (index, pressed) => {
+      window.__masterGunPad.buttons[index].pressed = pressed;
+    };
+    Object.defineProperty(navigator, "getGamepads", { configurable: true, value: () => [window.__masterGunPad] });
+  });
+}
+
+async function pressGamepad(page, buttonIndex) {
+  await page.evaluate((index) => window.__setMasterGunButton(index, true), buttonIndex);
+  await page.waitForTimeout(120);
+  await page.evaluate((index) => window.__setMasterGunButton(index, false), buttonIndex);
+  await page.waitForTimeout(180);
 }
 
 async function assertLocalizedInfo(page) {
@@ -71,6 +97,11 @@ async function assertLocalizedInfo(page) {
   }
   await page.locator("[data-action='closeInfo']").click();
   await page.getByTestId("locale-select").selectOption("en");
+}
+
+async function readCash(page) {
+  const cash = await page.getByTestId("cash-chip").textContent();
+  return Number(cash.replace(/\D/g, ""));
 }
 
 async function assertResponsiveShell(browser) {

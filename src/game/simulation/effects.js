@@ -4,6 +4,11 @@ import { findWeapon } from "../content/weapons.js";
 import { buildStats } from "./stats.js";
 
 export function applyContactEffect(run, entity) {
+  if (entity.type === ENTITY.CASH) {
+    collectCash(run, entity);
+    return;
+  }
+
   if (entity.type === ENTITY.GATE) {
     applyGate(run, entity);
     return;
@@ -32,16 +37,15 @@ export function applyContactEffect(run, entity) {
 }
 
 export function applyDamageReward(run, entity) {
-  run.destroyedValue += entity.value ?? 0;
-
   if (entity.type === ENTITY.FINISH_BLOCK) {
+    run.destroyedValue += entity.value ?? 0;
     run.finishTier += 1;
     run.messages.push(createMessage(t(run.locale, "message.finish", { value: entity.value }), "cash"));
     return;
   }
 
-  if (entity.value) {
-    run.messages.push(createMessage(`+$${entity.value}`, "cash"));
+  if (shouldDropCash(entity)) {
+    spawnCashDrop(run, entity);
   }
 }
 
@@ -77,6 +81,31 @@ function applyWeapon(run, weaponId) {
   run.stats = buildStats(run.upgradesSnapshot ?? {}, run.modifiers, weapon.id);
   run.player.ammo = Math.max(run.player.ammo, Math.round(run.stats.ammo * 0.45));
   run.messages.push(createMessage(t(run.locale, "message.weapon", { name: t(run.locale, weapon.labelKey) }), "buff"));
+}
+
+function collectCash(run, entity) {
+  run.destroyedValue += entity.value ?? 0;
+  run.messages.push(createMessage(t(run.locale, "message.cashCollected", { value: entity.value }), "cash"));
+}
+
+function shouldDropCash(entity) {
+  return [ENTITY.ENEMY, ENTITY.SHOOTER, ENTITY.BOSS].includes(entity.type) && entity.value > 0;
+}
+
+function spawnCashDrop(run, entity) {
+  run.entities.push({
+    id: run.nextId++,
+    type: ENTITY.CASH,
+    x: entity.x,
+    z: entity.z + 0.35,
+    width: 0.55,
+    depth: 0.55,
+    value: entity.value,
+    label: `$${entity.value}`,
+    active: true,
+    collected: false,
+  });
+  run.messages.push(createMessage(t(run.locale, "message.cashDropped"), "cash"));
 }
 
 function isPositiveAmmoBank(entity) {

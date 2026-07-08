@@ -89,6 +89,7 @@ export function createEntityObject(entity) {
     [ENTITY.PICKUP]: createPickupObject,
     [ENTITY.WEAPON_PICKUP]: createWeaponPickupObject,
     [ENTITY.BOSS]: createBossObject,
+    [ENTITY.CASH]: createCashDropObject,
   };
 
   return creators[entity.type]?.(entity) ?? new THREE.Group();
@@ -264,6 +265,18 @@ function createWeaponPickupObject(entity) {
   crate.position.y = 0.32;
   label.position.set(0, 1.12, 0);
   group.add(crate, barrel, label);
+  return group;
+}
+
+function createCashDropObject(entity) {
+  const group = new THREE.Group();
+  const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.1, 18), shared.cashMaterial);
+  const label = createLabelSprite(entity.label, { background: COLORS.cash, foreground: "#102014", scaleX: 1.05, scaleY: 0.46, fontSize: 72 });
+
+  coin.rotation.x = Math.PI / 2;
+  coin.position.y = 0.28;
+  label.position.set(0, 0.82, 0);
+  group.add(coin, label);
   return group;
 }
 

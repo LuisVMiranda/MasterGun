@@ -16,6 +16,7 @@ export const ENTITY = Object.freeze({
   FINISH_BLOCK: "finishBlock",
   WEAPON_PICKUP: "weaponPickup",
   BOSS: "boss",
+  CASH: "cash",
 });
 
 export const LANES = Object.freeze([-3.3, -1.1, 1.1, 3.3]);

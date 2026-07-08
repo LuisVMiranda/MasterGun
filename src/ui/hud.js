@@ -23,6 +23,15 @@ export function createHud(root, callbacks) {
       updateHud(elements, state);
       updateOverlay(elements, state);
     },
+    activateFocused() {
+      activateFocusedAction(root, elements.overlay);
+    },
+    moveFocus(direction) {
+      moveOverlayFocus(elements.overlay, direction);
+    },
+    hasOverlay() {
+      return elements.overlay.classList.contains("is-visible");
+    },
   };
 }
 
@@ -112,7 +121,11 @@ function updateHud(elements, state) {
 function updateOverlay(elements, state) {
   const content = getOverlayContent(state);
   elements.overlay.classList.toggle("is-visible", Boolean(content));
+  if (elements.overlay.dataset.content === content) return;
+
   elements.overlay.innerHTML = content;
+  elements.overlay.dataset.content = content;
+  if (content) focusFirstAction(elements.overlay);
 }
 
 function getOverlayContent(state) {
@@ -353,4 +366,28 @@ function getProgressPercent(run) {
 
 function formatNumber(value) {
   return Math.max(0, Math.floor(value)).toLocaleString("en-US");
+}
+
+function activateFocusedAction(root, overlay) {
+  const active = root.ownerDocument.activeElement;
+  const button = active?.closest?.("button:not(:disabled)");
+  const target = overlay.contains(button) ? button : getFocusableActions(overlay)[0];
+  target?.click();
+}
+
+function moveOverlayFocus(overlay, direction) {
+  const actions = getFocusableActions(overlay);
+  if (actions.length === 0) return;
+
+  const activeIndex = actions.indexOf(overlay.ownerDocument.activeElement);
+  const nextIndex = activeIndex < 0 ? 0 : (activeIndex + direction + actions.length) % actions.length;
+  actions[nextIndex].focus();
+}
+
+function focusFirstAction(overlay) {
+  getFocusableActions(overlay)[0]?.focus();
+}
+
+function getFocusableActions(overlay) {
+  return [...overlay.querySelectorAll("button:not(:disabled)")];
 }

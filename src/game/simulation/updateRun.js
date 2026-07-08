@@ -9,6 +9,7 @@ import { calculateLiveScore, getCollisionPenalty } from "./scoring.js";
 const CONTACT_LIMIT = 2;
 const BOUNCE_DURATION = 1.5;
 const BOUNCE_DISTANCE = 0.92;
+const WORLD_BOUNCE_SECONDS = 1.5;
 
 export function updateRunState(state, input, dt) {
   if (!state.run) return state;
@@ -16,8 +17,8 @@ export function updateRunState(state, input, dt) {
   const run = state.run;
   const delta = Math.min(dt, 0.05);
   run.elapsed += delta;
-  run.distance += run.profile.speed * delta;
   updatePlayer(run, input, delta);
+  run.distance += run.profile.speed * getRunSpeedScale(run) * delta;
   updateWeapons(run, delta);
   moveActors(run, delta);
   updateShooters(run, delta);
@@ -54,6 +55,7 @@ function updatePlayer(run, input, dt) {
 
 function updatePlayerRecoil(run, dt) {
   run.player.recoilTimer = Math.max(0, (run.player.recoilTimer ?? 0) - dt);
+  run.player.interruptTimer = Math.max(0, (run.player.interruptTimer ?? 0) - dt);
 
   if (run.player.recoilTimer <= 0) {
     run.player.recoilZ = 0;
@@ -63,6 +65,14 @@ function updatePlayerRecoil(run, dt) {
   const duration = run.player.recoilDuration ?? BOUNCE_DURATION;
   const ratio = clamp(run.player.recoilTimer / duration, 0, 1);
   run.player.recoilZ = BOUNCE_DISTANCE * Math.sin(ratio * Math.PI * 0.5);
+}
+
+function getRunSpeedScale(run) {
+  const timer = run.player.interruptTimer ?? 0;
+  if (timer <= 0) return 1;
+
+  const ratio = clamp(timer / BOUNCE_DURATION, 0, 1);
+  return 0.22 + (1 - ratio) * 0.78;
 }
 
 function updateWeapons(run, dt) {
@@ -134,7 +144,7 @@ function moveActors(run, dt) {
   });
 
   run.entities.forEach((entity) => {
-    entity.z -= getEntitySpeed(run, entity) * dt;
+    entity.z -= getEntitySpeed(run, entity) * dt * getRunSpeedScale(run);
     moveHazard(entity, run);
     moveWalker(entity, run);
     moveBoss(entity, run);
@@ -321,14 +331,17 @@ function resolvePlayerContacts(run) {
 
   run.entities.forEach((entity) => {
     const canCollect = entity.active && !entity.collected && isContactEntity(entity);
+    if (!canCollect || !intersects(playerBox, entity)) return;
 
-    if (canCollect && intersects(playerBox, entity)) {
-      entity.collected = true;
-      entity.active = false;
-      triggerPlayerBounce(run);
-      applyContactEffect(run, entity);
-    }
+    collectEntity(run, entity);
   });
+}
+
+function collectEntity(run, entity) {
+  entity.collected = true;
+  entity.active = false;
+  if (entity.type !== ENTITY.CASH) triggerPlayerBounce(run, entity);
+  applyContactEffect(run, entity);
 }
 
 function resolveTargetCollisions(run) {
@@ -351,19 +364,30 @@ function collideWithTarget(run, entity) {
     return;
   }
 
-  bounceTarget(run, entity);
+  triggerPlayerBounce(run, entity);
 }
 
-function bounceTarget(run, entity) {
-  const separationZ = TRACK.contactZ + entity.depth + run.profile.speed * BOUNCE_DURATION + 0.35;
-  entity.z = Math.max(entity.z, separationZ);
-  triggerPlayerBounce(run);
-}
-
-function triggerPlayerBounce(run) {
+function triggerPlayerBounce(run, source) {
   run.player.recoilDuration = BOUNCE_DURATION;
   run.player.recoilTimer = BOUNCE_DURATION;
+  run.player.interruptTimer = BOUNCE_DURATION;
   run.player.recoilZ = BOUNCE_DISTANCE;
+  pushRunwayAway(run, source);
+}
+
+function pushRunwayAway(run, source) {
+  const distance = run.profile.speed * WORLD_BOUNCE_SECONDS;
+  run.distance = Math.max(0, run.distance - distance);
+
+  run.entities.forEach((entity) => {
+    if (entity.active) entity.z += distance;
+  });
+
+  run.enemyProjectiles.forEach((projectile) => {
+    projectile.z += distance;
+  });
+
+  addScoreLossNumber(run, 0, { ...source, z: TRACK.playerZ + 0.8, textKey: "message.interrupted" });
 }
 
 function resolveEnemyProjectileHits(run) {
@@ -393,7 +417,7 @@ function queueAudio(run, type, owner, count) {
 }
 
 function isContactEntity(entity) {
-  return entity.type === ENTITY.GATE || entity.type === ENTITY.HAZARD || entity.type === ENTITY.PICKUP || entity.type === ENTITY.WEAPON_PICKUP;
+  return entity.type === ENTITY.GATE || entity.type === ENTITY.HAZARD || entity.type === ENTITY.PICKUP || entity.type === ENTITY.WEAPON_PICKUP || entity.type === ENTITY.CASH;
 }
 
 function isPenaltyTarget(entity) {
@@ -412,7 +436,7 @@ function addScoreLossNumber(run, value, source) {
   const ttl = 0.86;
   run.damageNumbers.push({
     id: run.nextId++,
-    text: formatPenalty(run, "message.scoreLoss", value),
+    text: source.textKey ? t(run.locale, source.textKey) : formatPenalty(run, "message.scoreLoss", value),
     tone: "penalty",
     value,
     x: source.x ?? run.player.x,
