@@ -34,6 +34,11 @@ try {
   });
 
   await page.goto(URL, { waitUntil: "networkidle" });
+  await page.getByTestId("profile-name").click();
+  await page.keyboard.type("Dado");
+  const profileText = await page.getByTestId("profile-name").inputValue();
+  if (profileText !== "Dado") throw new Error(`Profile input blocked typed movement keys: ${profileText}`);
+
   await page.getByTestId("start-run").click();
   await page.mouse.move(920, 420);
   await page.waitForTimeout(4500);

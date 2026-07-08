@@ -45,10 +45,10 @@ export const COLORS = Object.freeze({
   debuff: "#ff3451",
   warning: "#ffcb3d",
   cash: "#8eff2e",
-  runway: "#8feee4",
-  runwayAlt: "#a8f6ee",
-  rail: "#425e76",
-  sky: "#66c8ff",
+  runway: "#c5fff7",
+  runwayAlt: "#defefb",
+  rail: "#3b6f84",
+  sky: "#86d7ff",
 });
 
 export const SAVE_KEY = "master-gun-save-v1";

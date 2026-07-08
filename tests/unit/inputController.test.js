@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { pointerToTrackX, readGamepadAxis, readKeyboardAxis } from "../../src/game/input/inputController.js";
+import {
+  isTextEntryTarget,
+  pointerToTrackX,
+  readGamepadAxis,
+  readKeyboardAxis,
+  updateTrackedKey,
+} from "../../src/game/input/inputController.js";
 
 const target = {
   getBoundingClientRect() {
@@ -18,4 +24,41 @@ describe("input direction", () => {
     expect(readKeyboardAxis(new Set(["ArrowRight"]))).toBeLessThan(0);
     expect(readGamepadAxis({ axes: [-1], buttons: [] })).toBeGreaterThan(0);
   });
+
+  it("does not block profile text entry with movement keys", () => {
+    const keys = new Set();
+    const event = createKeyEvent("D", { tagName: "input" });
+
+    updateTrackedKey(keys, event, true);
+
+    expect(keys.has("D")).toBe(false);
+    expect(event.prevented).toBe(false);
+  });
+
+  it("keeps game shortcuts active outside text entry", () => {
+    const keys = new Set();
+    const event = createKeyEvent("D", { tagName: "canvas" });
+
+    updateTrackedKey(keys, event, true);
+
+    expect(keys.has("D")).toBe(true);
+    expect(event.prevented).toBe(true);
+  });
+
+  it("detects editable profile controls", () => {
+    expect(isTextEntryTarget({ tagName: "input" })).toBe(true);
+    expect(isTextEntryTarget({ isContentEditable: true })).toBe(true);
+    expect(isTextEntryTarget({ tagName: "canvas" })).toBe(false);
+  });
 });
+
+function createKeyEvent(key, target) {
+  return {
+    key,
+    target,
+    prevented: false,
+    preventDefault() {
+      this.prevented = true;
+    },
+  };
+}

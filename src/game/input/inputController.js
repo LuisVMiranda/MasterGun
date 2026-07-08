@@ -1,6 +1,9 @@
 import { TRACK } from "../content/constants.js";
 import { clamp } from "../simulation/math.js";
 
+const TRACKED_KEYS = new Set(["ArrowLeft", "ArrowRight", "a", "A", "d", "D", "Escape", "Enter", " "]);
+const TEXT_ENTRY_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
+
 export function createInputController(target) {
   const keys = new Set();
   const state = {
@@ -18,8 +21,8 @@ export function createInputController(target) {
     state.source = "pointer";
   };
 
-  const onKeyDown = (event) => updateKey(keys, event, true);
-  const onKeyUp = (event) => updateKey(keys, event, false);
+  const onKeyDown = (event) => updateTrackedKey(keys, event, true);
+  const onKeyUp = (event) => updateTrackedKey(keys, event, false);
 
   target.addEventListener("pointermove", onPointerMove);
   window.addEventListener("keydown", onKeyDown);
@@ -47,15 +50,28 @@ export function pointerToTrackX(clientX, target) {
   return clamp((0.5 - ratio) * TRACK.halfWidth * 2, -TRACK.halfWidth, TRACK.halfWidth);
 }
 
-function updateKey(keys, event, isDown) {
-  if (isTrackedKey(event.key)) {
-    event.preventDefault();
-    keys[isDown ? "add" : "delete"](event.key);
+export function updateTrackedKey(keys, event, isDown) {
+  if (!isTrackedKey(event.key)) return;
+
+  if (isTextEntryTarget(event.target)) {
+    if (!isDown) keys.delete(event.key);
+    return;
   }
+
+  event.preventDefault();
+  keys[isDown ? "add" : "delete"](event.key);
 }
 
 function isTrackedKey(key) {
-  return ["ArrowLeft", "ArrowRight", "a", "A", "d", "D", "Escape", "Enter", " "].includes(key);
+  return TRACKED_KEYS.has(key);
+}
+
+export function isTextEntryTarget(target) {
+  if (!target || typeof target !== "object") return false;
+  if (target.closest?.("input, textarea, select, [contenteditable='true']")) return true;
+
+  const tagName = typeof target.tagName === "string" ? target.tagName.toUpperCase() : "";
+  return TEXT_ENTRY_TAGS.has(tagName) || target.isContentEditable === true;
 }
 
 export function readKeyboardAxis(keys) {
