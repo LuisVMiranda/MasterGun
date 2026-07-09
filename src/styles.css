@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  font-family: Roboto, Arial, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "MasterGun Rajdhani", "Rajdhani", "Roboto Condensed", Roboto, Arial, ui-sans-serif, system-ui, sans-serif;
   --ink: #f7fbff;
   --muted: #a9bad0;
   --panel: rgba(13, 21, 34, 0.82);
@@ -29,7 +29,7 @@ body,
   font-family: inherit;
 }
 
-button {
+button, input, select {
   border: 0;
   font: inherit;
   font-family: inherit;
@@ -385,7 +385,7 @@ h3 {
 
 .shop-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
 }
 
@@ -512,7 +512,7 @@ h3 {
   }
 
   .shop-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
   .wiki-grid {
     grid-template-columns: 1fr;

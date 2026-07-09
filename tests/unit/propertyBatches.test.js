@@ -34,9 +34,11 @@ function assertValidPlan(plan) {
 
 function assertCheckpointCadence(level) {
   const plan = createRoundPlan(level, 500 + level);
-  const hasBoss = plan.entities.some((entity) => entity.type === ENTITY.BOSS);
+  const bosses = plan.entities.filter((entity) => entity.type === ENTITY.BOSS);
+  const hasBoss = bosses.length > 0;
 
   expect(hasBoss).toBe(level % 5 === 0);
+  expect(bosses.length).toBe(level % 5 === 0 ? 1 : 0);
   expect(plan.profile.challenge).toBe(level % 5 === 0);
 }
 

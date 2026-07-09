@@ -1,28 +1,32 @@
-import { ENTITY, LANES, TARGET_SCALE, TRACK } from "../content/constants.js";
+import { ENTITY, TARGET_SCALE } from "../content/constants.js";
 import { t, tStat } from "../content/i18n.js";
-import { getPickupWeapon } from "../content/weapons.js";
+import { DEFAULT_WEAPON_ID, getPickupWeapon } from "../content/weapons.js";
 import { choose, clamp } from "./math.js";
+import { POWERUP_MIN_GAP, START_Z, chooseTargetX, createPathSlots } from "./roundPlacement.js";
+import { createSegmentSlots, createSpacedSlots, getAmmoSupportPickupCount } from "./roundPlacement.js";
+import { getAmmoSupportValue, getGameplayEnd, getGateSequenceCount } from "./roundPlacement.js";
+import { getReadablePressureOffset, randomOffset } from "./roundPlacement.js";
 import { getLevelProfile } from "./progression.js";
 import { createSeededRandom } from "./random.js";
 
 const COMMON_BUFFS = Object.freeze(["fireRate", "range", "ammo", "power"]);
+const ASSISTANT_BUFFS = Object.freeze(["assistantAmmo"]);
 const RARE_BUFFS = Object.freeze(["doubleWeapon", "assistants"]);
 const DEBUFFS = Object.freeze(["fireRate", "range", "ammo", "power"]);
-const START_Z = 12;
-const FINISH_BUFFER = 18;
-const TARGET_MARGIN = 0.78;
 
-export function createRoundPlan(level, seed, locale = "en") {
+export function createRoundPlan(level, seed, locale = "en", weaponId = DEFAULT_WEAPON_ID) {
   const profile = getLevelProfile(level);
   const random = createSeededRandom(seed);
   const cursor = { id: 1, z: START_Z };
   const entities = [];
-  const context = { random, profile, locale };
+  const bossZ = profile.challenge ? getBossStartZ(profile, getGameplayEnd(profile)) : null;
+  const context = { random, profile, locale, weaponId, bossZ, rarePlaced: new Set(), lastEnemyGateIndex: -99 };
 
   addOpeningTargets(entities, cursor, random, profile);
   addGateSequence(entities, cursor, context);
+  addAmmoSupportPickups(entities, cursor, context);
   addChallengeEvents(entities, cursor, context);
-  addFinishLadder(entities, cursor, profile);
+  if (!profile.challenge) addFinishLadder(entities, cursor, profile);
   entities.sort(sortByDistance);
 
   return {
@@ -33,47 +37,10 @@ export function createRoundPlan(level, seed, locale = "en") {
   };
 }
 
-function createPathSlots(profile, random) {
-  const startZ = Math.min(START_Z + 24, getGameplayEnd(profile) - 12);
-  return createSegmentSlots(profile.gateCount, startZ, getGameplayEnd(profile), random);
-}
-
-function createSegmentSlots(count, startZ, endZ, random) {
-  if (count <= 0) return [];
-
-  const span = Math.max(1, endZ - startZ);
-  const spacing = span / count;
-
-  return Array.from({ length: count }, (_, index) => {
-    const center = startZ + spacing * (index + 0.5);
-    const wave = Math.sin((index + 1) * 1.91) * spacing * 0.2;
-    const jitter = randomOffset(random, Math.min(spacing * 0.32, 6.5));
-    return Number(clamp(center + wave + jitter, startZ, endZ).toFixed(2));
-  }).sort((a, b) => a - b);
-}
-
-function getGameplayEnd(profile) {
-  return Math.max(START_Z + 44, profile.trackLength - (profile.finishRows * 2.2 + FINISH_BUFFER));
-}
-
-function chooseTargetX(random) {
-  const x = choose(LANES, random) + randomOffset(random, 0.52);
-  return Number(clamp(x, -TRACK.halfWidth + TARGET_MARGIN, TRACK.halfWidth - TARGET_MARGIN).toFixed(2));
-}
-
 function createGateLanes(random) {
   const left = -2.95 + random() * 1.15;
   const right = 1.8 + random() * 1.15;
   return random() > 0.5 ? [left, right] : [right, left];
-}
-
-function getPressureOffset(random) {
-  if (random() > 0.72) return -(1.8 + random() * 1.4);
-  return 2.35 + random() * 3.15;
-}
-
-function randomOffset(random, amount) {
-  return (random() - 0.5) * amount * 2;
 }
 
 function sortByDistance(first, second) {
@@ -81,8 +48,8 @@ function sortByDistance(first, second) {
 }
 
 function addOpeningTargets(entities, cursor, random, profile) {
-  const count = Math.min(profile.enemyCount, profile.band === "early" ? 3 : 4);
-  const endZ = Math.min(getGameplayEnd(profile) * 0.25, START_Z + 54);
+  const count = Math.min(profile.enemyCount, getOpeningEnemyCount(profile));
+  const endZ = Math.min(getGameplayEnd(profile) * 0.34, START_Z + 72);
   const slots = createSegmentSlots(count, START_Z, endZ, random);
 
   for (let index = 0; index < count; index += 1) {
@@ -90,40 +57,93 @@ function addOpeningTargets(entities, cursor, random, profile) {
   }
 }
 
+function getOpeningEnemyCount(profile) {
+  if (profile.band === "late" || profile.band === "elite") return 4;
+  return 3;
+}
+
 function addChallengeEvents(entities, cursor, context) {
   const { random, profile, locale } = context;
   if (!profile.challenge) return;
 
-  const startZ = Math.min(getGameplayEnd(profile) * 0.24, START_Z + 44);
-  const pickupSlots = createSegmentSlots(5, startZ, startZ + 16, random);
+  const bossZ = context.bossZ;
+  const pickupSlots = createSpacedSlots(6, START_Z + 30, bossZ - 18, random, POWERUP_MIN_GAP);
 
-  for (let index = 0; index < 5; index += 1) {
+  addBossGauntlet(entities, cursor, context, bossZ);
+
+  for (let index = 0; index < pickupSlots.length; index += 1) {
+    if (!isPowerupSlotClear(entities, pickupSlots[index])) continue;
     const stat = choose(COMMON_BUFFS, random);
     const value = getPickupValue(stat, profile, index);
     entities.push(createPickup(cursor, chooseTargetX(random), pickupSlots[index], { stat, value, locale }));
   }
 
   const weapon = getPickupWeapon(profile.level, random);
-  entities.push(createWeaponPickup(cursor, chooseTargetX(random), startZ + 13, weapon, locale));
-  entities.push(createBoss(cursor, randomOffset(random, 1.05), startZ + 16, profile, locale));
+  if (isPowerupSlotClear(entities, bossZ - 10)) {
+    entities.push(createWeaponPickup(cursor, chooseTargetX(random), bossZ - 10, weapon, locale));
+  }
+  entities.push(createBoss(cursor, randomOffset(random, 1.05), bossZ, profile, locale));
+}
+
+function getBossStartZ(profile, gameplayEnd) {
+  const base = gameplayEnd * (profile.level >= 80 ? 0.48 : 0.52);
+  return Number(clamp(base, START_Z + 82, gameplayEnd - 20).toFixed(2));
+}
+
+function addBossGauntlet(entities, cursor, context, bossZ) {
+  const { random, profile, locale } = context;
+  const slots = createSegmentSlots(getBossGuardCount(profile), START_Z + 22, bossZ - 24, random);
+  slots.forEach((z, index) => addBossGuard(entities, cursor, context, z, index));
+  entities.push(createSolidWall(cursor, chooseTargetX(random), bossZ - 22, profile.difficulty, t(locale, "entity.wall")));
+  entities.push(createShooter(cursor, chooseTargetX(random), bossZ - 17, { profile, shooterKind: "walker", locale }));
+}
+
+function getBossGuardCount(profile) {
+  return Math.min(9, 4 + Math.floor(profile.level / 35));
+}
+
+function addBossGuard(entities, cursor, context, z, index) {
+  const { random, profile, locale } = context;
+  const pattern = index % 5;
+
+  if (pattern === 1) {
+    entities.push(createShooter(cursor, chooseTargetX(random), z, { profile, shooterKind: "still", locale }));
+    return;
+  }
+
+  if (pattern === 3) {
+    entities.push(createBarricade(cursor, chooseTargetX(random), z, profile.difficulty));
+    return;
+  }
+
+  const kind = getBossEnemyKind(profile, index);
+  entities.push(createEnemy(cursor, chooseTargetX(random), profile, z, kind));
+}
+
+function getBossEnemyKind(profile, index) {
+  if (profile.level >= 120 && index % 4 === 0) return "brute";
+  if (profile.level >= 75 && index % 4 === 0) return "shield";
+  if (profile.level >= 20 && index % 2 === 0) return "sprinter";
+  return "runner";
 }
 
 function addGateSequence(entities, cursor, context) {
   const { random, profile } = context;
-  const slots = createPathSlots(profile, random);
+  const endZ = context.bossZ ? Math.max(START_Z + 44, context.bossZ - 16) : getGameplayEnd(profile);
+  const slots = createPathSlots(profile, random, endZ, getGateSequenceCount(profile, endZ));
 
-  for (let index = 0; index < profile.gateCount; index += 1) {
+  for (let index = 0; index < slots.length; index += 1) {
     cursor.z = slots[index];
     const lanes = addGatePair(entities, cursor, context, index);
     addBlockedUpgrade(entities, cursor, lanes.buffLane, context, index);
-    addPressureObject(entities, cursor, context, index);
+    addPressureObject(entities, cursor, context, index, lanes);
   }
 }
 
 function addGatePair(entities, cursor, context, index) {
   const { random, profile, locale } = context;
   const lane = createGateLanes(random);
-  const buff = chooseBuff(random, profile, index);
+  const buff = chooseBuff(context, index);
   const debuff = choose(DEBUFFS, random);
 
   entities.push(createGate(cursor, lane[0], "buff", buff, { value: getBuffValue(buff, profile, index), locale }));
@@ -131,10 +151,24 @@ function addGatePair(entities, cursor, context, index) {
   return { buffLane: lane[0], debuffLane: lane[1] };
 }
 
-function chooseBuff(random, profile, index) {
-  if (!canRollRareBuff(profile, index)) return choose(COMMON_BUFFS, random);
-  if (random() < getRareBuffChance(profile)) return choose(RARE_BUFFS, random);
-  return choose(COMMON_BUFFS, random);
+function chooseBuff(context, index) {
+  const { random, profile } = context;
+  const commonBuffs = getCommonBuffs(profile);
+  if (!canRollRareBuff(profile, index)) return choose(commonBuffs, random);
+  if (random() >= getRareBuffChance(profile)) return choose(commonBuffs, random);
+
+  const rareBuff = choose(getAvailableRareBuffs(context), random);
+  if (!rareBuff) return choose(commonBuffs, random);
+  context.rarePlaced.add(rareBuff);
+  return rareBuff;
+}
+
+function getCommonBuffs(profile) {
+  return profile.level >= 12 ? [...COMMON_BUFFS, ...ASSISTANT_BUFFS] : COMMON_BUFFS;
+}
+
+function getAvailableRareBuffs(context) {
+  return RARE_BUFFS.filter((buff) => buff !== "doubleWeapon" || !context.rarePlaced.has(buff));
 }
 
 function canRollRareBuff(profile, index) {
@@ -155,41 +189,105 @@ function addBlockedUpgrade(entities, cursor, x, context, index) {
   entities.push(createSolidWall(cursor, x, z, profile.difficulty, t(locale, "entity.upgradeBlock")));
 }
 
-function addPressureObject(entities, cursor, context, index) {
+function addPressureObject(entities, cursor, context, index, lanes) {
   const { random, profile, locale } = context;
-  const z = cursor.z + getPressureOffset(random);
+  const z = cursor.z + getReadablePressureOffset(random, profile);
+  const x = choosePressureX(random, profile, lanes);
+  const kind = getPressureKind(entities, context, index, z);
+  if (!kind) return;
 
-  if (index < profile.walls) {
-    entities.push(createSolidWall(cursor, chooseTargetX(random), z, profile.difficulty, t(locale, "entity.wall")));
-    return;
-  }
+  addPressureEntity(entities, cursor, { kind, x, z, profile, locale, random });
+}
 
-  if (index < profile.walls + profile.walkers) {
-    entities.push(createShooter(cursor, chooseTargetX(random), z, { profile, shooterKind: "walker", locale }));
-    return;
-  }
+function getPressureKind(entities, context, index, z) {
+  const { random, profile } = context;
+  const fixedKind = getFixedPressureKind(profile, index);
+  if (fixedKind) return fixedKind;
 
-  if (index < profile.walls + profile.walkers + profile.shooters) {
-    entities.push(createShooter(cursor, chooseTargetX(random), z, { profile, shooterKind: "still", locale }));
-    return;
-  }
-
-  if (index < profile.walls + profile.walkers + profile.shooters + profile.barricades) {
-    entities.push(createBarricade(cursor, chooseTargetX(random), z, profile.difficulty));
-    return;
-  }
-
-  if (profile.level >= 4 && random() < 0.08) {
-    entities.push(createWeaponPickup(cursor, chooseTargetX(random), z, getPickupWeapon(profile.level, random), locale));
-    return;
+  if (profile.level >= 4 && random() < 0.08 && isPowerupSlotClear(entities, z)) {
+    return "weapon";
   }
 
   if (profile.band !== "early" && random() < profile.hazardChance) {
-    entities.push(createHazard(cursor, chooseTargetX(random), z, profile.difficulty, locale));
-    return;
+    return "hazard";
   }
 
-  entities.push(createEnemy(cursor, chooseTargetX(random), profile, z));
+  if (!shouldSpawnRoamingEnemy(context, index)) return;
+  return "enemy";
+}
+
+function getFixedPressureKind(profile, index) {
+  const ranges = [
+    [profile.walls, "wall"],
+    [profile.walls + profile.walkers, "walker"],
+    [profile.walls + profile.walkers + profile.shooters, "shooter"],
+    [profile.walls + profile.walkers + profile.shooters + profile.barricades, "barricade"],
+  ];
+  return ranges.find(([limit]) => index < limit)?.[1];
+}
+
+function addPressureEntity(entities, cursor, details) {
+  const { kind, x, z, profile, locale, random } = details;
+  const factories = {
+    wall: () => createSolidWall(cursor, x, z, profile.difficulty, t(locale, "entity.wall")),
+    walker: () => createShooter(cursor, x, z, { profile, shooterKind: "walker", locale }),
+    shooter: () => createShooter(cursor, x, z, { profile, shooterKind: "still", locale }),
+    barricade: () => createBarricade(cursor, x, z, profile.difficulty),
+    weapon: () => createWeaponPickup(cursor, x, z, getPickupWeapon(profile.level, random), locale),
+    hazard: () => createHazard(cursor, x, z, profile.difficulty, locale),
+    enemy: () => createEnemy(cursor, x, profile, z),
+  };
+
+  entities.push(factories[kind]());
+}
+
+function choosePressureX(random, profile, lanes) {
+  if (profile.level >= 70 || !lanes) return chooseTargetX(random);
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const x = chooseTargetX(random);
+    if ([lanes.buffLane, lanes.debuffLane].every((lane) => Math.abs(x - lane) > 1.1)) return x;
+  }
+
+  return chooseTargetX(random);
+}
+
+function shouldSpawnRoamingEnemy(context, index) {
+  const { profile, random } = context;
+  const gap = profile.level <= 30 ? 1 : 0;
+  if (index - context.lastEnemyGateIndex <= gap) return false;
+  if (random() >= getRoamingEnemyChance(profile.level)) return false;
+
+  context.lastEnemyGateIndex = index;
+  return true;
+}
+
+function getRoamingEnemyChance(level) {
+  if (level <= 30) return 0.76;
+  if (level <= 80) return 0.7;
+  return 0.72;
+}
+
+function addAmmoSupportPickups(entities, cursor, context) {
+  const { random, profile, locale, weaponId } = context;
+  const count = getAmmoSupportPickupCount(profile, weaponId);
+  if (count <= 0) return;
+
+  const endZ = Math.max(START_Z + 50, (context.bossZ ?? getGameplayEnd(profile)) - 22);
+  const slots = createSpacedSlots(count, START_Z + 44, endZ, random, POWERUP_MIN_GAP);
+
+  slots.forEach((z, index) => {
+    if (!isPowerupSlotClear(entities, z)) return;
+    entities.push(createPickup(cursor, chooseTargetX(random), z, { stat: "ammo", value: getAmmoSupportValue(profile, weaponId, index), locale }));
+  });
+}
+
+function isPowerupSlotClear(entities, z) {
+  return entities.every((entity) => !isFloorPowerup(entity) || Math.abs(entity.z - z) >= POWERUP_MIN_GAP);
+}
+
+function isFloorPowerup(entity) {
+  return entity.type === ENTITY.PICKUP || entity.type === ENTITY.WEAPON_PICKUP;
 }
 
 function addFinishLadder(entities, cursor, profile) {
@@ -205,7 +303,7 @@ function addFinishLadder(entities, cursor, profile) {
 
 function createGate(cursor, x, gateType, stat, details) {
   const { value, locale } = details;
-  const health = gateType === "buff" ? 10 : 16;
+  const health = gateType === "buff" ? 5 : 16;
   return {
     id: cursor.id++,
     type: ENTITY.GATE,
@@ -226,8 +324,8 @@ function createGate(cursor, x, gateType, stat, details) {
   };
 }
 
-function createEnemy(cursor, x, profile, z = cursor.z) {
-  const enemyKind = getEnemyKind(profile, cursor.id);
+function createEnemy(cursor, x, profile, z = cursor.z, kind = null) {
+  const enemyKind = kind ?? getEnemyKind(profile, cursor.id);
   const health = getEnemyHealth(profile, enemyKind);
   return {
     id: cursor.id++,
@@ -248,7 +346,7 @@ function createEnemy(cursor, x, profile, z = cursor.z) {
 
 function getEnemyKind(profile, seed) {
   if (profile.level >= 120 && seed % 7 === 0) return "brute";
-  if (profile.level >= 45 && seed % 5 === 0) return "shield";
+  if (profile.level >= 65 && seed % 6 === 0) return "shield";
   if (profile.level >= 20 && seed % 4 === 0) return "sprinter";
   return "runner";
 }
@@ -355,7 +453,6 @@ function createFinishBlock(cursor, x, z, health, value) {
 
 function createPickup(cursor, x, z, details) {
   const { stat, value, locale } = details;
-  const ammoHealth = getAmmoPickupHealth(stat, value);
   return {
     id: cursor.id++,
     type: ENTITY.PICKUP,
@@ -366,7 +463,9 @@ function createPickup(cursor, x, z, details) {
     stat,
     value,
     label: `${tStat(locale, stat)} +${value}`,
-    ...createAmmoBank(stat, value, ammoHealth),
+    health: 1,
+    maxHealth: 1,
+    ...createAmmoBank(stat, value),
     active: true,
     collected: false,
   };
@@ -388,7 +487,7 @@ function createWeaponPickup(cursor, x, z, weapon, locale) {
 }
 
 function createBoss(cursor, x, z, profile, locale) {
-  const health = Math.round(95 + profile.difficulty * 32);
+  const stats = getBossStats(profile);
   return {
     id: cursor.id++,
     type: ENTITY.BOSS,
@@ -398,35 +497,47 @@ function createBoss(cursor, x, z, profile, locale) {
     width: size(1.05),
     depth: size(0.95),
     label: t(locale, "entity.boss"),
-    health,
-    maxHealth: health,
-    value: Math.round(95 + profile.level * 12),
+    health: stats.health,
+    maxHealth: stats.health,
+    value: stats.value,
     shootCooldown: 0.45,
-    shootInterval: Math.max(0.56, 1.1 - profile.difficulty * 0.04),
-    projectileSpeed: 13 + profile.difficulty,
-    retreatSpeed: profile.speed * 0.34,
-    penalty: Math.round(55 + profile.level * 2.5),
+    shootInterval: stats.shootInterval,
+    projectileSpeed: stats.projectileSpeed,
+    retreatSpeed: profile.speed * getBossRetreatScale(profile.level),
+    penalty: stats.penalty,
     active: true,
   };
+}
+
+function getBossStats(profile) {
+  const lateHealth = Math.max(0, profile.level - 80) * 4.2;
+  const eliteHealth = Math.max(0, profile.level - 150) * 3.4;
+  return {
+    health: Math.round(110 + profile.level * 4.6 + lateHealth + eliteHealth + profile.difficulty * 18),
+    value: Math.round(110 + profile.level * 14 + profile.difficulty * 18),
+    shootInterval: Math.max(0.48, 1.18 - profile.difficulty * 0.035 - profile.level * 0.0009),
+    projectileSpeed: Number((12.5 + profile.difficulty * 0.95).toFixed(2)),
+    penalty: Math.round(45 + profile.level * 2.9 + profile.difficulty * 2),
+  };
+}
+
+function getBossRetreatScale(level) {
+  if (level >= 140) return 0.42;
+  if (level >= 80) return 0.38;
+  return 0.34;
 }
 
 function size(value) {
   return Number((value * TARGET_SCALE).toFixed(3));
 }
 
-function createAmmoBank(stat, value, health) {
+function createAmmoBank(stat, value) {
   if (stat !== "ammo" || value <= 0) return {};
   const cap = Math.max(1, Math.round(value));
   return {
     ammoCap: cap,
     ammoEarned: 0,
-    ...(health ? { health, maxHealth: health } : {}),
   };
-}
-
-function getAmmoPickupHealth(stat, value) {
-  if (stat !== "ammo" || value <= 0) return undefined;
-  return Math.max(6, Math.round(value * 0.55));
 }
 
 function getBuffValue(stat, profile, index) {
@@ -435,6 +546,7 @@ function getBuffValue(stat, profile, index) {
     fireRate: Number((0.35 * scale).toFixed(2)),
     range: Number((2.2 * scale).toFixed(1)),
     ammo: Math.round(18 * scale),
+    assistantAmmo: Math.round(12 * scale),
     power: Number((2.6 * scale).toFixed(1)),
     doubleWeapon: 1,
     assistants: 1,

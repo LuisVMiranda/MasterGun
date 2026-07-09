@@ -1,6 +1,9 @@
 import { STARTING_CASH } from "../content/constants.js";
 import { createUpgradeLevels, findUpgrade, getUpgradeCost } from "../content/upgrades.js";
 import { DEFAULT_WEAPON_ID, createWeaponInventory, findWeapon, getWeaponCost } from "../content/weapons.js";
+import { createAchievementState, createMissionStats } from "./achievements.js";
+
+const COMPLETION_REWARD_FLOOR = 0.3;
 
 export function createDefaultSave() {
   return {
@@ -15,6 +18,8 @@ export function createDefaultSave() {
     profileName: "Pilot 1",
     profiles: [],
     leaderboard: [],
+    achievements: createAchievementState(),
+    missionStats: createMissionStats(),
     settings: { reducedMotion: false, volume: 0.7, locale: "en" },
   };
 }
@@ -22,8 +27,10 @@ export function createDefaultSave() {
 export function calculateRoundReward(summary) {
   const finishBonus = summary.finishTier * 42;
   const combatBonus = summary.destroyedValue;
-  const rawReward = Math.max(0, summary.baseReward + finishBonus + combatBonus - (summary.scorePenalty ?? 0));
-  return Math.round(rawReward * summary.incomeMultiplier);
+  const minimumReward = summary.baseReward * COMPLETION_REWARD_FLOOR;
+  const rawReward = Math.max(minimumReward, summary.baseReward + finishBonus + combatBonus - (summary.scorePenalty ?? 0));
+  const lifeMultiplier = 0.72 + clamp(summary.lifeRatio ?? 1, 0, 1) * 0.28;
+  return Math.round(rawReward * summary.incomeMultiplier * lifeMultiplier);
 }
 
 export function canBuyUpgrade(save, upgradeId, currentLevel = save.level) {
@@ -87,6 +94,7 @@ export function purchaseWeapon(save, weaponId) {
 export function equipWeapon(save, weaponId) {
   const owned = new Set(save.weaponsOwned ?? []);
   if (!owned.has(weaponId)) return save;
+  if (save.equippedWeapon === weaponId) return save;
   return { ...save, equippedWeapon: weaponId };
 }
 
@@ -102,4 +110,8 @@ export function applyRoundReward(save, reward, finishTier) {
 function parseOfferId(offerId = "") {
   if (!offerId.includes(":")) return ["upgrade", offerId];
   return offerId.split(":");
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }

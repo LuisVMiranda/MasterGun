@@ -1,43 +1,61 @@
 import * as THREE from "three";
 import { COLORS, ENTITY } from "../../game/content/constants.js";
 import { createLabelSprite } from "./labels.js";
+import { createWeaponObject } from "./weapons.js";
 
 const shared = {
   bulletGeometry: new THREE.SphereGeometry(0.12, 12, 8),
   bulletMaterial: new THREE.MeshStandardMaterial({ color: "#1558ff", emissive: "#164aff", emissiveIntensity: 0.8 }),
   enemyBulletMaterial: new THREE.MeshStandardMaterial({ color: "#ff3451", emissive: "#ff133d", emissiveIntensity: 1 }),
   cashMaterial: new THREE.MeshStandardMaterial({ color: COLORS.cash, roughness: 0.35 }),
-  stickHeadGeometry: new THREE.SphereGeometry(0.22, 14, 10),
-  stickLimbGeometry: new THREE.CylinderGeometry(0.045, 0.055, 0.82, 8),
-  stickTorsoGeometry: new THREE.CylinderGeometry(0.075, 0.095, 0.88, 10),
+  stickHeadGeometry: new THREE.SphereGeometry(0.22, 18, 14),
+  stickJointGeometry: new THREE.SphereGeometry(0.075, 10, 8),
+  stickHandGeometry: new THREE.SphereGeometry(0.065, 10, 8),
+  stickFootGeometry: new THREE.BoxGeometry(0.18, 0.09, 0.3),
+  stickLimbGeometry: new THREE.CylinderGeometry(0.04, 0.055, 0.48, 10),
+  stickTorsoGeometry: new THREE.CylinderGeometry(0.16, 0.22, 0.72, 14),
   stickMaterials: {
     runner: new THREE.MeshStandardMaterial({ color: "#ff3451", roughness: 0.5 }),
     sprinter: new THREE.MeshStandardMaterial({ color: "#ff5a49", roughness: 0.45 }),
     shield: new THREE.MeshStandardMaterial({ color: "#c92343", roughness: 0.6 }),
     brute: new THREE.MeshStandardMaterial({ color: "#a71935", roughness: 0.62 }),
+    skin: new THREE.MeshStandardMaterial({ color: "#ff8f7f", roughness: 0.55 }),
     gear: new THREE.MeshStandardMaterial({ color: "#1b2230", metalness: 0.45, roughness: 0.25 }),
   },
 };
 
 export function createPlayerObject() {
   const group = new THREE.Group();
-  const barrel = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.16, 0.2, 1.6, 18),
-    new THREE.MeshStandardMaterial({ color: "#2f3544", metalness: 0.6, roughness: 0.28 }),
-  );
-  const grip = new THREE.Mesh(
-    new THREE.BoxGeometry(0.34, 0.7, 0.28),
-    new THREE.MeshStandardMaterial({ color: "#8d6c67", roughness: 0.65 }),
-  );
+  const socket = new THREE.Group();
   const glow = new THREE.PointLight("#ffe58b", 0.8, 4);
 
-  barrel.rotation.x = Math.PI / 2;
-  barrel.position.set(0, 0.56, 0.55);
-  grip.rotation.x = -0.45;
-  grip.position.set(0, 0.15, -0.12);
+  socket.position.set(0, 0, 0);
   glow.position.set(0, 0.65, 1.3);
-  group.add(barrel, grip, glow);
+  group.userData.weaponSocket = socket;
+  group.add(socket, glow);
+  setPlayerWeaponObject(group, "pistol", false);
   return group;
+}
+
+export function setPlayerWeaponObject(player, weaponId, doubleWeapon = false) {
+  const visualKey = `${weaponId}:${doubleWeapon}`;
+  if (player.userData.weaponId === visualKey) return;
+
+  const socket = player.userData.weaponSocket;
+  socket.clear();
+  socket.add(...createPlayerWeapons(weaponId, doubleWeapon));
+  player.userData.weaponId = visualKey;
+}
+
+function createPlayerWeapons(weaponId, doubleWeapon) {
+  if (!doubleWeapon) return [createWeaponObject(weaponId)];
+
+  const left = createWeaponObject(weaponId, { scale: 0.94 });
+  const right = createWeaponObject(weaponId, { scale: 0.94 });
+  left.position.x = -0.34;
+  right.position.x = 0.34;
+  right.scale.x *= -1;
+  return [left, right];
 }
 
 export function createAssistantObject() {
@@ -255,16 +273,12 @@ function createWeaponPickupObject(entity) {
     new THREE.BoxGeometry(0.9, 0.52, 0.7),
     new THREE.MeshStandardMaterial({ color: "#875cff", roughness: 0.38, metalness: 0.18 }),
   );
-  const barrel = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.07, 0.09, 0.9, 12),
-    new THREE.MeshStandardMaterial({ color: "#202735", metalness: 0.55, roughness: 0.25 }),
-  );
+  const weapon = createWeaponObject(entity.weaponId, { scale: 0.58 });
   const label = createLabelSprite(entity.label, { background: "#875cff", scaleX: 1.55, scaleY: 0.54, fontSize: 62 });
-  barrel.rotation.x = Math.PI / 2;
-  barrel.position.set(0, 0.52, 0.14);
+  weapon.position.set(0, 0.54, 0.02);
   crate.position.y = 0.32;
   label.position.set(0, 1.12, 0);
-  group.add(crate, barrel, label);
+  group.add(crate, weapon, label);
   return group;
 }
 
@@ -324,12 +338,10 @@ function createStickman(kind, scale = 1) {
   const group = new THREE.Group();
   const bodyGroup = new THREE.Group();
   const material = shared.stickMaterials[kind] ?? shared.stickMaterials.runner;
-  const torso = new THREE.Mesh(shared.stickTorsoGeometry, material);
-  const head = new THREE.Mesh(shared.stickHeadGeometry, material);
+  const torso = createTorso(material);
+  const head = createHead(material);
   const limbs = createStickmanLimbs(material, scale);
 
-  torso.position.y = 0.94;
-  head.position.y = 1.5;
   bodyGroup.scale.setScalar(scale);
   bodyGroup.add(torso, head, ...limbs);
   bodyGroup.traverse((child) => {
@@ -342,22 +354,61 @@ function createStickman(kind, scale = 1) {
 
 function createStickmanLimbs(material, scale) {
   return [
-    createLimb(material, -0.23, 1.05, 0.55, 0.36),
-    createLimb(material, 0.23, 1.05, -0.55, -0.36),
-    createLimb(material, -0.16, 0.36, -0.25, -0.18),
-    createLimb(material, 0.16, 0.36, 0.25, 0.18),
+    createLimb(material, { x: -0.28, y: 1.08, rotationZ: 0.54, rotationX: 0.38, endKind: "hand" }),
+    createLimb(material, { x: 0.28, y: 1.08, rotationZ: -0.54, rotationX: -0.38, endKind: "hand" }),
+    createLimb(material, { x: -0.15, y: 0.45, rotationZ: -0.28, rotationX: -0.18, endKind: "foot" }),
+    createLimb(material, { x: 0.15, y: 0.45, rotationZ: 0.28, rotationX: 0.18, endKind: "foot" }),
   ].map((limb) => {
     limb.scale.y = scale > 1.4 ? 1.08 : 1;
     return limb;
   });
 }
 
-function createLimb(material, x, y, rotationZ, rotationX) {
-  const limb = new THREE.Mesh(shared.stickLimbGeometry, material);
-  limb.position.set(x, y, 0);
-  limb.rotation.set(rotationX, 0, rotationZ);
-  limb.userData.baseRotation = { x: rotationX, z: rotationZ };
-  return limb;
+function createTorso(material) {
+  const group = new THREE.Group();
+  const torso = new THREE.Mesh(shared.stickTorsoGeometry, material);
+  const vest = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.42, 0.1), shared.stickMaterials.gear);
+  const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.16, 0.22), material);
+  torso.position.y = 0.95;
+  vest.position.set(0, 1.02, -0.08);
+  pelvis.position.y = 0.56;
+  group.add(torso, vest, pelvis);
+  return group;
+}
+
+function createHead(material) {
+  const group = new THREE.Group();
+  const head = new THREE.Mesh(shared.stickHeadGeometry, shared.stickMaterials.skin);
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.235, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.56), material);
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.27, 0.06, 0.045), shared.stickMaterials.gear);
+  head.position.y = 1.52;
+  helmet.position.y = 1.61;
+  visor.position.set(0, 1.54, -0.19);
+  group.add(head, helmet, visor);
+  return group;
+}
+
+function createLimb(material, config) {
+  const { x, y, rotationZ, rotationX, endKind } = config;
+  const group = new THREE.Group();
+  const upper = new THREE.Mesh(shared.stickLimbGeometry, material);
+  const lower = new THREE.Mesh(shared.stickLimbGeometry, material);
+  const joint = new THREE.Mesh(shared.stickJointGeometry, shared.stickMaterials.gear);
+  const end = createLimbEnd(endKind);
+  upper.position.y = -0.2;
+  lower.position.y = -0.62;
+  joint.position.y = -0.42;
+  end.position.y = -0.86;
+  group.position.set(x, y, 0);
+  group.rotation.set(rotationX, 0, rotationZ);
+  group.userData.baseRotation = { x: rotationX, z: rotationZ };
+  group.add(upper, lower, joint, end);
+  return group;
+}
+
+function createLimbEnd(endKind) {
+  if (endKind === "foot") return new THREE.Mesh(shared.stickFootGeometry, shared.stickMaterials.gear);
+  return new THREE.Mesh(shared.stickHandGeometry, shared.stickMaterials.skin);
 }
 
 function addEnemyVariantGear(group, enemyKind) {

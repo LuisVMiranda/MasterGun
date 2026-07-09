@@ -75,6 +75,8 @@ function createSnapshot(save) {
     upgrades: { ...save.upgrades },
     weaponsOwned: [...(save.weaponsOwned ?? [])],
     equippedWeapon: save.equippedWeapon,
+    achievements: { ...save.achievements, completedIds: [...(save.achievements?.completedIds ?? [])] },
+    missionStats: { ...(save.missionStats ?? {}) },
     settings: { ...save.settings },
   };
 }

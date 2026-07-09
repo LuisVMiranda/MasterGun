@@ -1,6 +1,8 @@
 import { ENTITY } from "../content/constants.js";
 import { t, tStat } from "../content/i18n.js";
 import { findWeapon } from "../content/weapons.js";
+import { recordCashCollected, recordGreenBuff } from "./achievements.js";
+import { createSeededRandom } from "./random.js";
 import { buildStats } from "./stats.js";
 
 export function applyContactEffect(run, entity) {
@@ -21,13 +23,7 @@ export function applyContactEffect(run, entity) {
   }
 
   if (entity.type === ENTITY.PICKUP) {
-    if (isPositiveAmmoBank(entity)) {
-      run.messages.push(createMessage(t(run.locale, "message.ammoBanked", { value: entity.ammoEarned ?? 0, cap: entity.ammoCap }), "buff"));
-      return;
-    }
-
-    addModifier(run, entity.stat, entity.value);
-    run.messages.push(createMessage(t(run.locale, "message.pickup", { stat: tStat(run.locale, entity.stat), value: entity.value }), "buff"));
+    applyPickup(run, entity);
     return;
   }
 
@@ -40,13 +36,22 @@ export function applyDamageReward(run, entity) {
   if (entity.type === ENTITY.FINISH_BLOCK) {
     run.destroyedValue += entity.value ?? 0;
     run.finishTier += 1;
+    maybeDropFinishCash(run, entity);
     run.messages.push(createMessage(t(run.locale, "message.finish", { value: entity.value }), "cash"));
     return;
   }
 
   if (shouldDropCash(entity)) {
-    spawnCashDrop(run, entity);
+    spawnCashDrop(run, entity, entity.value, entity.type);
   }
+}
+
+export function getFinishCashDrop(seed, entity) {
+  const profile = getFinishCashProfile(entity);
+  const random = createSeededRandom((seed ^ Math.imul(entity.id, 2654435761)) >>> 0);
+  const drops = random() <= profile.chance;
+  const value = Math.round(profile.value * (0.85 + random() * 0.35));
+  return { ...profile, drops, value };
 }
 
 export function pruneMessages(run, dt) {
@@ -58,17 +63,39 @@ export function pruneMessages(run, dt) {
 
 function applyGate(run, entity) {
   if (isPositiveAmmoBank(entity)) {
-    run.messages.push(createMessage(t(run.locale, "message.ammoBanked", { value: entity.ammoEarned ?? 0, cap: entity.ammoCap }), "buff"));
+    applyAmmoBank(run, entity);
     return;
   }
 
+  if (entity.gateType === "buff") recordGreenBuff(run, entity.stat);
   addModifier(run, entity.stat, entity.value);
   run.messages.push(createMessage(entity.label, entity.gateType));
+}
+
+function applyPickup(run, entity) {
+  if (isPositiveAmmoBank(entity)) {
+    applyAmmoBank(run, entity);
+    return;
+  }
+
+  recordGreenBuff(run, entity.stat);
+  addModifier(run, entity.stat, entity.value);
+  run.messages.push(createMessage(t(run.locale, "message.pickup", { stat: tStat(run.locale, entity.stat), value: entity.value }), "buff"));
+}
+
+function applyAmmoBank(run, entity) {
+  if ((entity.ammoEarned ?? 0) > 0) recordGreenBuff(run, entity.stat);
+  run.messages.push(createMessage(t(run.locale, "message.ammoBanked", { value: entity.ammoEarned ?? 0, cap: entity.ammoCap }), "buff"));
 }
 
 function addModifier(run, stat, value) {
   if (stat === "ammo") {
     run.player.ammo = Math.max(0, run.player.ammo + value);
+  }
+
+  if (stat === "assistantAmmo") {
+    run.player.assistantAmmo = Math.max(0, run.player.assistantAmmo + value);
+    if (value > 0) run.player.assistantTimer = 0;
   }
 
   run.modifiers[stat] = (run.modifiers[stat] ?? 0) + value;
@@ -84,6 +111,7 @@ function applyWeapon(run, weaponId) {
 }
 
 function collectCash(run, entity) {
+  recordCashCollected(run, entity);
   run.destroyedValue += entity.value ?? 0;
   run.messages.push(createMessage(t(run.locale, "message.cashCollected", { value: entity.value }), "cash"));
 }
@@ -92,7 +120,12 @@ function shouldDropCash(entity) {
   return [ENTITY.ENEMY, ENTITY.SHOOTER, ENTITY.BOSS].includes(entity.type) && entity.value > 0;
 }
 
-function spawnCashDrop(run, entity) {
+function maybeDropFinishCash(run, entity) {
+  const drop = getFinishCashDrop(run.seed, entity);
+  if (drop.drops) spawnCashDrop(run, entity, drop.value, "finish");
+}
+
+function spawnCashDrop(run, entity, value, sourceType) {
   run.entities.push({
     id: run.nextId++,
     type: ENTITY.CASH,
@@ -100,12 +133,22 @@ function spawnCashDrop(run, entity) {
     z: entity.z + 0.35,
     width: 0.55,
     depth: 0.55,
-    value: entity.value,
-    label: `$${entity.value}`,
+    value,
+    label: `$${value}`,
+    sourceType,
     active: true,
     collected: false,
   });
   run.messages.push(createMessage(t(run.locale, "message.cashDropped"), "cash"));
+}
+
+function getFinishCashProfile(entity) {
+  const health = Math.max(1, entity.maxHealth ?? entity.health ?? 1);
+  const value = Math.max(8, Math.round((entity.value ?? health) * (0.18 + Math.min(0.52, health / 360))));
+  return {
+    chance: Math.min(0.8, 0.22 + health / 420),
+    value,
+  };
 }
 
 function isPositiveAmmoBank(entity) {

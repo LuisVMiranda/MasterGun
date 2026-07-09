@@ -1,3 +1,4 @@
+import { FOURTH_UPGRADE_SLOT_MISSION_ID, THIRD_UPGRADE_SLOT_MISSION_ID } from "./achievements.js";
 import { UPGRADE_DEFINITIONS, getUpgradeCost } from "./upgrades.js";
 import { WEAPON_DEFINITIONS, getWeaponCost } from "./weapons.js";
 
@@ -5,7 +6,15 @@ export function getShopOffers(save, seed = save.level) {
   const offers = shuffleOffers([...getUpgradeOffers(save), ...getWeaponOffers(save)], seed);
   const available = offers.filter((offer) => !offer.locked && !offer.maxed && !offer.owned);
   const backups = offers.filter((offer) => !available.includes(offer));
-  return [...available, ...backups].slice(0, 2);
+  return [...available, ...backups].slice(0, getShopSlotCount(save));
+}
+
+export function getShopSlotCount(save) {
+  const completed = new Set(save.achievements?.completedIds ?? []);
+  let slots = 2;
+  if (completed.has(THIRD_UPGRADE_SLOT_MISSION_ID)) slots += 1;
+  if (completed.has(FOURTH_UPGRADE_SLOT_MISSION_ID)) slots += 1;
+  return slots;
 }
 
 export function getOfferCost(offer, save) {

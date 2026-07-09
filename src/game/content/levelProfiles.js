@@ -97,22 +97,25 @@ function getGateCount(level, duration) {
 }
 
 function getEnemyCount(level, duration) {
-  return Math.min(38, Math.round(4 + duration / 6 + level * 0.04));
+  const projected = 4 + duration / 6 + level * 0.04;
+  return Math.min(27, Math.max(3, Math.round(projected * 0.7)));
 }
 
 function getPressureCounts(level, gateCount) {
   const slots = Math.max(0, gateCount - 3);
+  const shooterPace = level < 40 ? 16 : level < 80 ? 13 : 10;
+  const walkerPace = level < 40 ? 16 : level < 80 ? 13 : 11;
   return {
-    walls: level >= 6 ? Math.min(Math.floor(slots * 0.2), Math.floor(level / 9)) : 0,
-    walkers: level >= 13 ? Math.min(Math.floor(slots * 0.2), Math.floor(level / 11)) : 0,
-    shooters: level >= 9 ? Math.min(Math.floor(slots * 0.22), Math.floor(level / 10)) : 0,
-    barricades: level >= 4 ? Math.min(Math.floor(slots * 0.28), Math.floor(level / 7) + 1) : 0,
+    walls: level >= 6 ? Math.min(Math.floor(slots * 0.16), Math.floor(level / 18)) : 0,
+    walkers: level >= 13 ? Math.min(Math.floor(slots * 0.2), Math.floor(level / walkerPace)) : 0,
+    shooters: level >= 9 ? Math.min(Math.floor(slots * 0.22), Math.floor(level / shooterPace)) : 0,
+    barricades: level >= 4 ? Math.min(Math.floor(slots * 0.24), Math.floor(level / 13) + 1) : 0,
   };
 }
 
 function getBlockedUpgrades(level, gateCount) {
   if (level < 7) return 0;
-  return Math.min(Math.floor(gateCount * 0.22), Math.floor(level / 14) + 1);
+  return Math.min(Math.floor(gateCount * 0.18), Math.floor(level / 28) + 1);
 }
 
 function getHazardChance(level) {

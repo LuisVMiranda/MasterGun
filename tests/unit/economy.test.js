@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { FOURTH_UPGRADE_SLOT_MISSION_ID, THIRD_UPGRADE_SLOT_MISSION_ID } from "../../src/game/content/achievements.js";
 import { getShopOffers } from "../../src/game/content/shop.js";
 import { getShopUpgrades } from "../../src/game/content/upgrades.js";
 import { calculateRoundReward, canBuyUpgrade, createDefaultSave, purchaseShopOffer, purchaseUpgrade } from "../../src/game/simulation/economy.js";
@@ -16,7 +17,7 @@ describe("economy", () => {
     expect(reward).toBe(407);
   });
 
-  it("subtracts only run score penalties before payout", () => {
+  it("keeps a small completion payout after heavy score penalties", () => {
     const reward = calculateRoundReward({
       baseReward: 100,
       destroyedValue: 20,
@@ -25,7 +26,27 @@ describe("economy", () => {
       scorePenalty: 200,
     });
 
-    expect(reward).toBe(0);
+    expect(reward).toBe(30);
+  });
+
+  it("reduces round reward when the player finishes with lower life", () => {
+    const strongFinish = calculateRoundReward({
+      baseReward: 100,
+      destroyedValue: 30,
+      finishTier: 2,
+      incomeMultiplier: 1,
+      lifeRatio: 1,
+    });
+    const roughFinish = calculateRoundReward({
+      baseReward: 100,
+      destroyedValue: 30,
+      finishTier: 2,
+      incomeMultiplier: 1,
+      lifeRatio: 0.25,
+    });
+
+    expect(roughFinish).toBeLessThan(strongFinish);
+    expect(roughFinish).toBeGreaterThan(0);
   });
 
   it("spends only earned soft currency on upgrades", () => {
@@ -45,6 +66,12 @@ describe("economy", () => {
 
     expect(purchaseUpgrade(save, "assistants", 1).purchased).toBe(false);
     expect(purchaseUpgrade(save, "assistants", 12).purchased).toBe(true);
+    expect(purchaseUpgrade(save, "assistantAmmo", 12).purchased).toBe(true);
+    expect(purchaseUpgrade(save, "baseLife", 2).purchased).toBe(true);
+    expect(purchaseUpgrade(save, "wallDamage", 8).purchased).toBe(true);
+    expect(purchaseUpgrade(save, "breachDamage", 18).purchased).toBe(true);
+    expect(purchaseUpgrade(save, "shieldDamage", 34).purchased).toBe(false);
+    expect(purchaseUpgrade(save, "doubleWeapon", 99).purchased).toBe(false);
   });
 
   it("offers exactly two random unlocked upgrades in the shop", () => {
@@ -54,6 +81,7 @@ describe("economy", () => {
     expect(choices).toHaveLength(2);
     expect(new Set(ids).size).toBe(2);
     expect(choices.every((upgrade) => !upgrade.locked)).toBe(true);
+    expect(ids).not.toContain("doubleWeapon");
   });
 
   it("mixes persistent weapon offers into the shop", () => {
@@ -64,6 +92,15 @@ describe("economy", () => {
 
     expect(offers).toHaveLength(2);
     expect(offers.some((offer) => offer.kind === "weapon" || offer.kind === "upgrade")).toBe(true);
+  });
+
+  it("unlocks third and fourth shop offer slots from hard achievements", () => {
+    const save = createDefaultSave();
+    save.cash = 20000;
+    save.achievements.completedIds = [THIRD_UPGRADE_SLOT_MISSION_ID, FOURTH_UPGRADE_SLOT_MISSION_ID];
+
+    expect(getShopOffers(createDefaultSave(), 7)).toHaveLength(2);
+    expect(getShopOffers(save, 7)).toHaveLength(4);
   });
 
   it("purchases and equips weapons through shop offers", () => {

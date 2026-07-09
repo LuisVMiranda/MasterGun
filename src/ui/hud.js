@@ -1,14 +1,17 @@
 import { PHASE } from "../game/content/constants.js";
 import { LOCALES, normalizeLocale, t, tStat } from "../game/content/i18n.js";
-import { getOfferCost } from "../game/content/shop.js";
-import { getShopUpgrades } from "../game/content/upgrades.js";
+import { getOfferCost, getShopOffers } from "../game/content/shop.js";
 import { WEAPON_DEFINITIONS, findWeapon } from "../game/content/weapons.js";
 import { formatCash } from "../game/simulation/math.js";
 import { getNextUnlock } from "../game/simulation/progression.js";
+import { renderControlHints } from "./hints.js";
 import { icon } from "./icons.js";
+import { renderLeaderboardButton, renderLeaderboardPanel } from "./leaderboardView.js";
+import { renderMissionProgress, renderMissions, renderVictory } from "./missionViews.js";
+import { weaponSprite } from "./weaponSprites.js";
 
-const STAT_ORDER = ["fireRate", "range", "ammo", "power", "income", "doubleWeapon", "assistants"];
-const WIKI_ITEMS = ["enemies", "variants", "health", "collision", "ammo", "duration", "buffs", "debuffs", "boss"];
+const STAT_ORDER = ["fireRate", "range", "ammo", "power", "baseLife", "income", "doubleWeapon", "assistants", "assistantAmmo", "wallDamage", "shieldDamage", "breachDamage"];
+const WIKI_ITEMS = ["enemies", "variants", "health", "life", "collision", "ammo", "assistants", "materials", "duration", "buffs", "debuffs", "boss"];
 
 export function createHud(root, callbacks) {
   root.innerHTML = createShell();
@@ -29,6 +32,9 @@ export function createHud(root, callbacks) {
     moveFocus(direction) {
       moveOverlayFocus(elements.overlay, direction);
     },
+    scrollOverlay(amount) {
+      scrollOverlayPanel(elements.overlay, amount);
+    },
     hasOverlay() {
       return elements.overlay.classList.contains("is-visible");
     },
@@ -44,11 +50,14 @@ function createShell() {
         <div class="hud-chip" data-testid="level-chip"></div>
         <div class="hud-chip cash" data-testid="cash-chip"></div>
         <div class="hud-chip" data-testid="ammo-chip"></div>
+        <div class="hud-chip life" data-testid="life-chip"></div>
         <div class="hud-chip score" data-testid="score-chip"></div>
+        <button class="icon-button" data-action="missions" data-testid="missions-button" aria-label="Missions">${icon("score")}</button>
         <button class="icon-button" data-action="info" data-testid="info-button" aria-label="Info">${icon("info")}</button>
         <select class="locale-select" data-change="locale" data-testid="locale-select"></select>
         <button class="icon-button" data-action="pause" aria-label="Pause">II</button>
       </section>
+      <section class="control-hints" data-testid="control-hints"></section>
       <section class="stat-stack" data-testid="stat-stack"></section>
       <section class="progress-strip">
         <div class="progress-fill" data-testid="progress-fill"></div>
@@ -61,11 +70,14 @@ function createShell() {
 
 function collectElements(root) {
   return {
+    shell: root.querySelector(".game-shell"),
     canvasHost: root.querySelector(".canvas-host"),
     level: root.querySelector("[data-testid='level-chip']"),
     cash: root.querySelector("[data-testid='cash-chip']"),
     ammo: root.querySelector("[data-testid='ammo-chip']"),
+    life: root.querySelector("[data-testid='life-chip']"),
     score: root.querySelector("[data-testid='score-chip']"),
+    hints: root.querySelector("[data-testid='control-hints']"),
     stats: root.querySelector("[data-testid='stat-stack']"),
     progress: root.querySelector("[data-testid='progress-fill']"),
     messages: root.querySelector("[data-testid='message-stack']"),
@@ -79,6 +91,7 @@ function handleClick(event, callbacks, root) {
   if (!button) return;
 
   const action = button.dataset.action;
+  rememberFocus(root, button);
   const actions = {
     start: callbacks.onStart,
     pause: callbacks.onPause,
@@ -88,6 +101,12 @@ function handleClick(event, callbacks, root) {
     reset: callbacks.onReset,
     info: callbacks.onInfo,
     closeInfo: callbacks.onCloseInfo,
+    missions: callbacks.onMissions,
+    closeMissions: callbacks.onCloseMissions,
+    missionFilter: () => callbacks.onMissionFilter(button.dataset.filter),
+    leaderboard: callbacks.onLeaderboard,
+    closeLeaderboard: callbacks.onCloseLeaderboard,
+    closeVictory: callbacks.onVictoryClose,
     buy: () => callbacks.onBuy(button.dataset.offer),
     equip: () => callbacks.onEquipWeapon(button.dataset.weapon),
     profileCreate: () => callbacks.onProfileCreate(getProfileInput(root)),
@@ -107,11 +126,14 @@ function handleChange(event, callbacks) {
 function updateHud(elements, state) {
   const locale = getLocale(state);
   const run = state.run;
+  elements.shell.dataset.inputSource = state.inputSource ?? "pointer";
   elements.level.innerHTML = `${icon("score")} ${t(locale, "hud.level", { value: state.save.level })}`;
   elements.cash.innerHTML = `${icon("cash")} ${t(locale, "hud.cash", { value: formatNumber(state.save.cash) })}`;
   elements.ammo.innerHTML = `${icon("ammo")} ${run ? t(locale, "hud.ammo", { value: Math.ceil(run.player.ammo) }) : t(locale, "hud.ammo", { value: "--" })}`;
+  elements.life.innerHTML = `${icon("life")} ${getLifeText(run, locale)}`;
   elements.score.innerHTML = `${icon("score")} ${t(locale, "hud.score", { value: run?.score ?? 0 })}`;
   elements.progress.style.width = `${getProgressPercent(run)}%`;
+  elements.hints.innerHTML = renderControlHints(state, locale);
   elements.stats.innerHTML = renderStats(state, locale);
   elements.messages.innerHTML = renderMessages(run);
   elements.locale.innerHTML = renderLocaleOptions(locale);
@@ -129,11 +151,29 @@ function updateOverlay(elements, state) {
 }
 
 function getOverlayContent(state) {
+  return getUiOverlayContent(state) || getPhaseOverlayContent(state);
+}
+
+function getUiOverlayContent(state) {
+  const locale = getLocale(state);
+  if (shouldShowVictory(state)) return renderVictory(state, locale);
   if (state.ui?.infoOpen) return renderInfo(state);
-  if (state.phase === PHASE.MENU) return renderMenu(state);
-  if (state.phase === PHASE.PAUSED) return renderPause(state);
-  if (state.phase === PHASE.SHOP) return renderShop(state);
+  if (state.ui?.missionsOpen) return renderMissions(state, locale);
+  if (state.ui?.leaderboardOpen) return renderLeaderboardPanel(state.save, locale);
   return "";
+}
+
+function getPhaseOverlayContent(state) {
+  const renderers = {
+    [PHASE.MENU]: renderMenu,
+    [PHASE.PAUSED]: renderPause,
+    [PHASE.SHOP]: renderShop,
+  };
+  return renderers[state.phase]?.(state) ?? "";
+}
+
+function shouldShowVictory(state) {
+  return Boolean(state.save.achievements?.gameWon && !state.save.achievements?.gameWonSeen);
 }
 
 function renderMenu(state) {
@@ -147,9 +187,10 @@ function renderMenu(state) {
         <span>${t(locale, "menu.bestTier", { value: state.save.bestFinishTier })}</span>
         <span>${t(locale, "menu.next", { value: t(locale, unlock.labelKey) })}</span>
       </div>
-      <button class="primary-button" data-action="start" data-testid="start-run">${t(locale, "action.start")}</button>
+        <button class="primary-button" data-action="start" data-testid="start-run" data-focus-key="start">${t(locale, "action.start")}</button>
       ${renderProfileTools(state, locale)}
       ${renderWeaponTools(state, locale)}
+      ${renderMissionProgress(state.save, locale)}
     </div>
   `;
 }
@@ -161,10 +202,12 @@ function renderProfileTools(state, locale) {
       <h2>${t(locale, "menu.profile")}: ${state.save.profileName}</h2>
       <div class="profile-row">
         <input class="profile-input" data-testid="profile-name" maxlength="18" placeholder="${t(locale, "menu.profilePlaceholder")}" />
-        <button class="secondary-button" data-action="profileCreate">${t(locale, "menu.createProfile")}</button>
+        <button class="secondary-button" data-action="profileCreate" data-focus-key="profileCreate">${t(locale, "menu.createProfile")}</button>
       </div>
-      <select class="profile-select" data-change="profile">${renderProfileOptions(profiles, state.save.profileId)}</select>
-      ${renderLeaderboard(state.save.leaderboard, locale)}
+      <div class="profile-actions">
+        <select class="profile-select" data-change="profile" data-focus-key="profileSelect">${renderProfileOptions(profiles, state.save.profileId)}</select>
+        ${renderLeaderboardButton(locale)}
+      </div>
     </section>
   `;
 }
@@ -185,9 +228,10 @@ function renderWeaponTools(state, locale) {
 
 function renderWeaponButton(weapon, equippedWeapon, locale) {
   const equipped = equippedWeapon === weapon.id;
+  const label = t(locale, weapon.labelKey);
   return `
-    <button class="${equipped ? "primary-button" : "secondary-button"}" data-action="equip" data-weapon="${weapon.id}">
-      ${t(locale, weapon.labelKey)}
+    <button class="${equipped ? "primary-button weapon-button" : "secondary-button weapon-button"}" data-action="equip" data-weapon="${weapon.id}" data-focus-key="equip:${weapon.id}">
+      ${weaponSprite(weapon.id, label)}<span>${label}</span>
     </button>
   `;
 }
@@ -198,9 +242,9 @@ function renderPause(state) {
     <div class="panel pause-panel">
       <h2>${t(locale, "action.pause")}</h2>
       <div class="button-row">
-        <button class="primary-button" data-action="resume">${t(locale, "action.resume")}</button>
-        <button class="secondary-button" data-action="menu">${t(locale, "action.menu")}</button>
-        <button class="danger-button" data-action="reset">${t(locale, "action.reset")}</button>
+        <button class="primary-button" data-action="resume" data-focus-key="resume">${t(locale, "action.resume")}</button>
+        <button class="secondary-button" data-action="menu" data-focus-key="menu">${t(locale, "action.menu")}</button>
+        <button class="danger-button" data-action="reset" data-focus-key="reset">${t(locale, "action.reset")}</button>
       </div>
     </div>
   `;
@@ -208,21 +252,26 @@ function renderPause(state) {
 
 function renderShop(state) {
   const locale = getLocale(state);
-  const choices = state.lastSummary?.shopOffers ?? getShopUpgrades(state.save.level);
+  const choices = state.lastSummary?.shopOffers ?? getShopOffers(state.save);
   const cards = choices.map((offer) => renderShopCard(offer, state, locale)).join("");
   const summary = state.lastSummary ?? { reward: 0, finishTier: 0, buildRating: 0, score: 0 };
+  const title = summary.failed ? t(locale, "shop.failed") : t(locale, "shop.complete");
+  const nextLabel = summary.failed ? t(locale, "action.retry") : t(locale, "action.next");
 
   return `
     <div class="panel shop-panel" data-testid="shop-panel">
       <div class="shop-heading">
-        <h2>${t(locale, "shop.complete")}</h2>
+        <h2>${title}</h2>
         <span>${t(locale, "shop.earned", { value: formatNumber(summary.reward) })}</span>
         <span>${t(locale, "shop.score", { value: summary.score })}</span>
+        <span>${t(locale, "shop.life", { value: Math.round((summary.lifeRatio ?? 1) * 100) })}</span>
         <span>${t(locale, "shop.tier", { value: summary.finishTier })}</span>
         <span>${t(locale, "shop.build", { value: summary.buildRating })}</span>
       </div>
+      ${renderWeaponTools(state, locale)}
+      ${renderMissionProgress(state.save, locale)}
       <div class="shop-grid">${cards}</div>
-      <button class="primary-button" data-action="next" data-testid="next-run">${t(locale, "action.next")}</button>
+      <button class="primary-button" data-action="next" data-testid="next-run" data-focus-key="next">${nextLabel}</button>
     </div>
   `;
 }
@@ -233,11 +282,11 @@ function renderShopCard(offer, state, locale) {
   const className = offer.locked ? "upgrade-card is-locked" : "upgrade-card";
   return `
     <article class="${className}">
-      <h3>${getOfferIcon(offer)} ${getOfferName(offer, locale)}</h3>
+      <h3>${getOfferIcon(offer, locale)} ${getOfferName(offer, locale)}</h3>
       <p>${getOfferStatus(offer, state.save, locale)}</p>
       <small>${getOfferDescription(offer, locale)}</small>
-      <button class="buy-button" data-action="buy" data-offer="${offer.offerId ?? `upgrade:${offer.id}`}" ${disabled}>
-        ${getOfferButtonLabel(offer, cost, locale)}
+      <button class="buy-button" data-action="buy" data-offer="${offer.offerId ?? `upgrade:${offer.id}`}" data-focus-key="buy:${offer.offerId ?? `upgrade:${offer.id}`}" data-focus-default ${disabled}>
+        ${getOfferButtonLabel(offer, state.save, cost, locale)}
       </button>
     </article>
   `;
@@ -250,7 +299,7 @@ function renderInfo(state) {
     <div class="panel info-panel" data-testid="info-panel">
       <div class="info-heading">
         <h2>${icon("info")} ${t(locale, "info.title")}</h2>
-        <button class="icon-button" data-action="closeInfo" aria-label="${t(locale, "action.close")}">X</button>
+        <button class="icon-button" data-action="closeInfo" data-focus-key="closeInfo" aria-label="${t(locale, "action.close")}">X</button>
       </div>
       <div class="wiki-grid">${items}</div>
     </div>
@@ -258,13 +307,23 @@ function renderInfo(state) {
 }
 
 function renderWikiItem(item, locale) {
-  const iconId = item === "boss" ? "boss" : item === "enemies" ? "enemy" : item === "ammo" ? "ammo" : "info";
+  const iconId = getWikiIcon(item);
   return `
     <article class="wiki-card">
       <h3>${icon(iconId)} ${t(locale, `info.${item}Title`)}</h3>
       <p>${t(locale, `info.${item}`)}</p>
     </article>
   `;
+}
+
+function getWikiIcon(item) {
+  if (item === "boss") return "boss";
+  if (item === "enemies") return "enemy";
+  if (item === "ammo") return "ammo";
+  if (item === "assistants") return "assistants";
+  if (item === "life") return "life";
+  if (item === "materials") return "wallDamage";
+  return "info";
 }
 
 function renderStats(state, locale) {
@@ -286,9 +345,14 @@ function getStatValue(stats, id) {
     range: Math.round(stats.range),
     ammo: Math.round(stats.ammo),
     power: Math.round(stats.power),
+    baseLife: Math.round(stats.baseLife),
     income: `${Math.round(stats.incomeMultiplier * 100)}%`,
     doubleWeapon: stats.projectileCount,
     assistants: stats.assistants,
+    assistantAmmo: Math.round(stats.assistantAmmo),
+    wallDamage: `${Math.round(stats.wallDamageMultiplier * 100)}%`,
+    shieldDamage: `${Math.round(stats.shieldDamageMultiplier * 100)}%`,
+    breachDamage: `${Math.round((stats.wallDamageMultiplier + stats.shieldDamageMultiplier) * 50)}%`,
   };
   return values[id] ?? "--";
 }
@@ -307,15 +371,6 @@ function renderProfileOptions(profiles, activeId) {
   return profiles.map((profile) => `<option value="${profile.profileId}" ${profile.profileId === activeId ? "selected" : ""}>${profile.profileName}</option>`).join("");
 }
 
-function renderLeaderboard(leaderboard = [], locale) {
-  const rows = leaderboard.length ? leaderboard.slice(0, 5).map(renderLeaderboardRow).join("") : `<li>${t(locale, "menu.noScores")}</li>`;
-  return `<div class="leaderboard"><h3>${t(locale, "menu.leaderboard")}</h3><ol>${rows}</ol></div>`;
-}
-
-function renderLeaderboardRow(entry) {
-  return `<li><b>${entry.profileName}</b><span>${entry.score}</span></li>`;
-}
-
 function getProfiles(save) {
   return save.profiles?.length ? save.profiles : [{ profileId: save.profileId, profileName: save.profileName }];
 }
@@ -331,24 +386,37 @@ function getOfferDescription(offer, locale) {
 }
 
 function getOfferStatus(offer, save, locale) {
-  if (offer.kind === "weapon" && (save.weaponsOwned ?? []).includes(offer.id)) return t(locale, "shop.owned");
-  if (offer.locked) return t(locale, "shop.unlock", { value: offer.unlockLevel });
+  if (isWeaponOwned(offer, save)) return t(locale, "shop.owned");
+  if (isOfferLocked(offer, save)) return t(locale, "shop.unlock", { value: offer.unlockLevel });
   return t(locale, "shop.level", { value: save.upgrades[offer.id] ?? 0 });
 }
 
-function getOfferButtonLabel(offer, cost, locale) {
-  if (offer.owned) return t(locale, "shop.owned");
-  if (offer.maxed) return t(locale, "shop.max");
-  if (offer.locked) return t(locale, "shop.unlock", { value: offer.unlockLevel });
+function getOfferButtonLabel(offer, save, cost, locale) {
+  if (isWeaponOwned(offer, save)) return t(locale, "shop.owned");
+  if (isOfferMaxed(offer, save)) return t(locale, "shop.max");
+  if (isOfferLocked(offer, save)) return t(locale, "shop.unlock", { value: offer.unlockLevel });
   return formatCash(cost);
 }
 
-function getOfferIcon(offer) {
-  return icon(offer.kind === "weapon" ? "weapon" : offer.id);
+function getOfferIcon(offer, locale) {
+  if (offer.kind === "weapon") return weaponSprite(offer.id, t(locale, offer.labelKey));
+  return icon(offer.id);
 }
 
 function isOfferDisabled(offer, save, cost) {
-  return offer.maxed || offer.locked || offer.owned || save.cash < cost;
+  return isOfferMaxed(offer, save) || isOfferLocked(offer, save) || isWeaponOwned(offer, save) || save.cash < cost;
+}
+
+function isOfferMaxed(offer, save) {
+  return offer.kind !== "weapon" && (save.upgrades[offer.id] ?? 0) >= offer.maxLevel;
+}
+
+function isOfferLocked(offer, save) {
+  return offer.unlockLevel > save.level;
+}
+
+function isWeaponOwned(offer, save) {
+  return offer.kind === "weapon" && (save.weaponsOwned ?? []).includes(offer.id);
 }
 
 function getLocale(state) {
@@ -364,15 +432,29 @@ function getProgressPercent(run) {
   return Math.min(100, (run.distance / run.profile.trackLength) * 100);
 }
 
+function getLifeText(run, locale) {
+  if (!run) return t(locale, "hud.life", { value: "--", total: "--" });
+  return t(locale, "hud.life", { value: Math.ceil(run.player.life), total: run.player.maxLife });
+}
+
 function formatNumber(value) {
   return Math.max(0, Math.floor(value)).toLocaleString("en-US");
 }
 
 function activateFocusedAction(root, overlay) {
   const active = root.ownerDocument.activeElement;
-  const button = active?.closest?.("button:not(:disabled)");
-  const target = overlay.contains(button) ? button : getFocusableActions(overlay)[0];
+  const control = active?.closest?.("button:not(:disabled), select:not(:disabled)");
+  const target = control && overlay.contains(control) ? control : getFocusableActions(overlay)[0];
+  if (target?.tagName === "SELECT") {
+    cycleSelect(target);
+    return;
+  }
   target?.click();
+}
+
+function rememberFocus(root, button) {
+  const overlay = root.querySelector(".overlay");
+  if (overlay) overlay.dataset.focusKey = button.dataset.focusKey ?? "";
 }
 
 function moveOverlayFocus(overlay, direction) {
@@ -385,9 +467,24 @@ function moveOverlayFocus(overlay, direction) {
 }
 
 function focusFirstAction(overlay) {
-  getFocusableActions(overlay)[0]?.focus();
+  const actions = getFocusableActions(overlay);
+  const remembered = actions.find((button) => button.dataset.focusKey === overlay.dataset.focusKey);
+  const preferred = actions.find((button) => button.dataset.focusDefault !== undefined);
+  (remembered ?? preferred ?? actions[0])?.focus();
 }
 
 function getFocusableActions(overlay) {
-  return [...overlay.querySelectorAll("button:not(:disabled)")];
+  return [...overlay.querySelectorAll("button:not(:disabled), select:not(:disabled)")];
+}
+
+function cycleSelect(select) {
+  if (select.options.length <= 1) return;
+  select.selectedIndex = (select.selectedIndex + 1) % select.options.length;
+  select.dispatchEvent(new select.ownerDocument.defaultView.Event("change", { bubbles: true }));
+}
+
+function scrollOverlayPanel(overlay, amount) {
+  const panel = overlay.querySelector(".panel");
+  if (!panel || panel.scrollHeight <= panel.clientHeight) return;
+  panel.scrollTop += amount;
 }

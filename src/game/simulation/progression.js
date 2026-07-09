@@ -27,17 +27,22 @@ export function getLevelProfile(level) {
 
 export function getNextUnlock(level, locale = "en") {
   const unlocks = [
-    { level: 2, key: "unlock.power" },
-    { level: 3, key: "unlock.income" },
-    { level: 4, key: "unlock.double" },
-    { level: 5, key: "unlock.assistants" },
+    { level: 2, key: "unlock.baseLife" },
+    { level: 4, key: "unlock.power" },
+    { level: 6, key: "unlock.income" },
     { level: 7, key: "unlock.solid" },
+    { level: 8, key: "unlock.wallDamage" },
+    { level: 9, key: "unlock.double" },
     { level: 9, key: "unlock.shooters" },
+    { level: 12, key: "unlock.assistants" },
+    { level: 12, key: "unlock.assistantAmmo" },
     { level: 12, key: "unlock.barricades" },
     { level: 13, key: "unlock.walkers" },
     { level: 16, key: "unlock.late" },
+    { level: 18, key: "unlock.breachDamage" },
     { level: 21, key: "unlock.siege" },
     { level: 30, key: "unlock.crown" },
+    { level: 35, key: "unlock.shieldDamage" },
   ];
   const unlock = unlocks.find((item) => item.level > level) ?? { level: level + 5, key: "unlock.cash" };
 

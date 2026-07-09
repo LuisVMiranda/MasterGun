@@ -10,10 +10,14 @@ export function createInputController(target) {
     axisX: 0,
     uiAxisX: 0,
     uiAxisY: 0,
+    scrollAxisY: 0,
     pointerX: 0,
     pointerActive: false,
     confirmPressed: false,
+    closePressed: false,
     pausePressed: false,
+    optionsPressed: false,
+    sharePressed: false,
     source: "pointer",
   };
 
@@ -35,8 +39,13 @@ export function createInputController(target) {
       state.axisX = readKeyboardAxis(keys);
       state.uiAxisX = readKeyboardUiAxisX(keys);
       state.uiAxisY = readKeyboardUiAxisY(keys);
+      state.scrollAxisY = 0;
       state.pausePressed = keys.has("Escape");
       state.confirmPressed = keys.has("Enter") || keys.has(" ");
+      state.closePressed = false;
+      state.optionsPressed = false;
+      state.sharePressed = false;
+      applyKeyboardSource(state, keys);
       mergeGamepad(state);
       return { ...state };
     },
@@ -91,15 +100,29 @@ function mergeGamepad(state) {
   const axis = readGamepadAxis(pad);
   state.uiAxisX = readGamepadUiAxisX(pad);
   state.uiAxisY = readGamepadUiAxisY(pad);
+  state.scrollAxisY = readGamepadScrollAxisY(pad);
 
   if (Math.abs(axis) > 0.05) {
     state.axisX = axis;
     state.pointerActive = false;
-    state.source = "controller";
   }
 
-  state.confirmPressed = state.confirmPressed || isButtonPressed(pad, 0);
-  state.pausePressed = state.pausePressed || isButtonPressed(pad, 9);
+  const buttons = readGamepadButtons(pad);
+  state.confirmPressed = state.confirmPressed || buttons.confirmPressed;
+  state.closePressed = buttons.closePressed;
+  state.optionsPressed = buttons.optionsPressed;
+  state.sharePressed = buttons.sharePressed;
+
+  if (hasGamepadActivity(pad, state, axis)) {
+    state.pointerActive = false;
+    state.source = "controller";
+  }
+}
+
+function applyKeyboardSource(state, keys) {
+  if (keys.size === 0) return;
+  state.pointerActive = false;
+  state.source = "keyboard";
 }
 
 function readGamepad() {
@@ -124,12 +147,32 @@ export function readGamepadUiAxisY(pad) {
   return Number(isButtonPressed(pad, 13)) - Number(isButtonPressed(pad, 12));
 }
 
+export function readGamepadScrollAxisY(pad) {
+  const stick = pad.axes[3] ?? 0;
+  return Math.abs(stick) > 0.2 ? Math.sign(stick) : 0;
+}
+
+export function readGamepadButtons(pad) {
+  return {
+    confirmPressed: isButtonPressed(pad, 0),
+    closePressed: isButtonPressed(pad, 3),
+    sharePressed: isButtonPressed(pad, 8),
+    optionsPressed: isButtonPressed(pad, 9),
+  };
+}
+
 function readKeyboardUiAxisX(keys) {
   return Number(keys.has("ArrowRight")) - Number(keys.has("ArrowLeft"));
 }
 
 function readKeyboardUiAxisY(keys) {
   return Number(keys.has("ArrowDown")) - Number(keys.has("ArrowUp"));
+}
+
+function hasGamepadActivity(pad, state, axis) {
+  const buttons = pad.buttons.some((button) => button?.pressed);
+  const axes = pad.axes.some((value) => Math.abs(value ?? 0) > 0.16);
+  return buttons || axes || Math.abs(axis) > 0.05 || Math.abs(state.uiAxisX) > 0 || Math.abs(state.uiAxisY) > 0 || Math.abs(state.scrollAxisY) > 0;
 }
 
 function isButtonPressed(pad, index) {

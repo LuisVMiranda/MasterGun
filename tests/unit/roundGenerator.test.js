@@ -3,6 +3,7 @@ import { ENTITY, LANES, TARGET_SCALE } from "../../src/game/content/constants.js
 import { LEVEL_PROFILES, getTargetDurationSeconds } from "../../src/game/content/levelProfiles.js";
 import { createRoundPlan } from "../../src/game/simulation/roundGenerator.js";
 import { getLevelProfile } from "../../src/game/simulation/progression.js";
+import { buildStats } from "../../src/game/simulation/stats.js";
 
 describe("createRoundPlan", () => {
   it("creates repeatable rounds from the same seed", () => {
@@ -55,7 +56,7 @@ describe("createRoundPlan", () => {
   });
 
   it("spreads active targets across early, mid, and late runway sections", () => {
-    [1, 40, 120, 200].forEach((level) => {
+    [1, 41, 121, 199].forEach((level) => {
       const plan = createRoundPlan(level, 4040 + level);
       const targets = plan.entities.filter((entity) => entity.type !== ENTITY.FINISH_BLOCK);
       const spread = Math.max(...targets.map((entity) => entity.z)) - Math.min(...targets.map((entity) => entity.z));
@@ -83,6 +84,15 @@ describe("createRoundPlan", () => {
     expect(pickup.width).toBeCloseTo(0.62 * TARGET_SCALE);
   });
 
+  it("keeps green buff gates hittable by starter pistol shots", () => {
+    const plan = createRoundPlan(12, 1212);
+    const pistolPower = buildStats({}, {}, "pistol").power;
+    const buffGates = plan.entities.filter((entity) => entity.type === ENTITY.GATE && entity.gateType === "buff");
+
+    expect(buffGates.length).toBeGreaterThan(0);
+    expect(buffGates.every((gate) => gate.health <= pistolPower)).toBe(true);
+  });
+
   it("generates diverse enemy variants in late projected levels", () => {
     const plans = [120, 160, 200].map((level) => createRoundPlan(level, 700 + level));
     const variants = new Set(plans.flatMap((plan) => plan.entities.filter((entity) => entity.type === ENTITY.ENEMY).map((entity) => entity.enemyKind)));
@@ -103,17 +113,78 @@ describe("createRoundPlan", () => {
     expect(plan.entities.some((entity) => entity.label === "Upgrade Block")).toBe(true);
   });
 
-  it("adds checkpoint challenge pickups and a catchable boss every five levels", () => {
+  it("keeps level 25 wall and shield pressure moderate", () => {
+    const plan = createRoundPlan(25, 2525);
+    const walls = plan.entities.filter((entity) => entity.type === ENTITY.SOLID_WALL);
+    const barricades = plan.entities.filter((entity) => entity.type === ENTITY.BARRICADE);
+    const shieldEnemies = plan.entities.filter((entity) => entity.enemyKind === "shield");
+
+    expect(walls).toHaveLength(3);
+    expect(barricades.length).toBeLessThanOrEqual(4);
+    expect(shieldEnemies).toHaveLength(0);
+  });
+
+  it("keeps level 25 enemies lighter and scattered for pistol runs", () => {
+    const plans = Array.from({ length: 30 }, (_, index) => createRoundPlan(25, 25000 + index));
+    const averageEnemies = averageCount(plans, (entity) => entity.type === ENTITY.ENEMY);
+    const averageShooters = averageCount(plans, (entity) => entity.type === ENTITY.SHOOTER);
+    const representative = createRoundPlan(25, 2525);
+    const boss = representative.entities.find((entity) => entity.type === ENTITY.BOSS);
+    const representativeHostiles = getHostiles(representative);
+    const sections = countRunwaySections(representativeHostiles, boss.z);
+
+    expect(averageEnemies).toBeLessThanOrEqual(9);
+    expect(averageShooters).toBeLessThanOrEqual(4.2);
+    expect(sections.filter(Boolean).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("adds curated checkpoint guards, spaced pickups, and a catchable boss every five levels", () => {
     const plan = createRoundPlan(10, 321);
-    const boss = plan.entities.find((entity) => entity.type === ENTITY.BOSS);
+    const bosses = plan.entities.filter((entity) => entity.type === ENTITY.BOSS);
+    const boss = bosses[0];
     const pickups = plan.entities.filter((entity) => entity.type === ENTITY.PICKUP);
     const weaponPickups = plan.entities.filter((entity) => entity.type === ENTITY.WEAPON_PICKUP);
+    const guards = plan.entities.filter((entity) => entity.z < boss.z);
+    const afterBoss = plan.entities.filter((entity) => entity.z > boss.z + 0.01);
+    const guardTypes = new Set(guards.map((entity) => entity.type));
+    const shooters = guards.filter((entity) => entity.type === ENTITY.SHOOTER);
     const catchTime = boss.z / (plan.profile.speed - boss.retreatSpeed);
 
     expect(plan.profile.challenge).toBe(true);
-    expect(pickups.length).toBeGreaterThanOrEqual(5);
+    expect(bosses).toHaveLength(1);
+    expect(boss.z).toBeGreaterThan(plan.profile.trackLength * 0.35);
+    expect(afterBoss).toHaveLength(0);
+    expect(plan.entities.some((entity) => entity.type === ENTITY.FINISH_BLOCK)).toBe(false);
+    expect(guardTypes.has(ENTITY.ENEMY)).toBe(true);
+    expect(guardTypes.has(ENTITY.SOLID_WALL)).toBe(true);
+    expect(guardTypes.has(ENTITY.BARRICADE)).toBe(true);
+    expect(shooters.some((entity) => entity.shooterKind === "still")).toBe(true);
+    expect(shooters.some((entity) => entity.shooterKind === "walker")).toBe(true);
+    expect(pickups.length).toBeGreaterThanOrEqual(4);
+    expect(getSmallestGap([...pickups, ...weaponPickups])).toBeGreaterThanOrEqual(8);
+    expect(pickups.every((pickup) => pickup.health === 1 && pickup.maxHealth === 1)).toBe(true);
     expect(weaponPickups.length).toBeGreaterThanOrEqual(1);
-    expect(catchTime).toBeLessThanOrEqual(15);
+    expect(catchTime).toBeLessThanOrEqual(plan.profile.targetDuration * 0.85);
+  });
+
+  it("hardens boss stats as checkpoint levels climb", () => {
+    const early = createRoundPlan(10, 1010).entities.find((entity) => entity.type === ENTITY.BOSS);
+    const late = createRoundPlan(100, 10100).entities.find((entity) => entity.type === ENTITY.BOSS);
+    const elite = createRoundPlan(200, 10200).entities.find((entity) => entity.type === ENTITY.BOSS);
+
+    expect(late.health).toBeGreaterThan(early.health);
+    expect(elite.health).toBeGreaterThan(late.health);
+    expect(late.value).toBeGreaterThan(early.value);
+    expect(elite.penalty).toBeGreaterThan(late.penalty);
+    expect(elite.projectileSpeed).toBeGreaterThan(late.projectileSpeed);
+  });
+
+  it("adds more ammo support pickups for high burn weapons", () => {
+    const pistol = createRoundPlan(25, 2525, "en", "pistol");
+    const machineGun = createRoundPlan(25, 2525, "en", "machineGun");
+
+    expect(countAmmoPickups(machineGun)).toBeGreaterThan(countAmmoPickups(pistol));
+    expect(getSmallestGap(machineGun.entities.filter((entity) => entity.type === ENTITY.PICKUP || entity.type === ENTITY.WEAPON_PICKUP))).toBeGreaterThanOrEqual(8);
   });
 
   it("localizes generated labels", () => {
@@ -127,9 +198,13 @@ describe("createRoundPlan", () => {
     const latePlans = Array.from({ length: 40 }, (_, index) => createRoundPlan(24, 9000 + index));
     const lateBuffs = getBuffStats(latePlans);
     const rareCount = lateBuffs.filter((stat) => ["assistants", "doubleWeapon"].includes(stat)).length;
+    const largestDoubleCount = Math.max(...latePlans.map((plan) => getBuffStats([plan]).filter((stat) => stat === "doubleWeapon").length));
 
     expect(earlyBuffs).not.toContain("assistants");
     expect(earlyBuffs).not.toContain("doubleWeapon");
+    expect(earlyBuffs).not.toContain("assistantAmmo");
+    expect(largestDoubleCount).toBeLessThanOrEqual(1);
+    expect(lateBuffs).toContain("assistantAmmo");
     expect(rareCount).toBeGreaterThan(0);
     expect(rareCount / lateBuffs.length).toBeLessThan(0.25);
   });
@@ -142,6 +217,18 @@ function getBuffStats(plans) {
     .map((entity) => entity.stat);
 }
 
+function averageCount(plans, predicate) {
+  return plans.reduce((total, plan) => total + plan.entities.filter(predicate).length, 0) / plans.length;
+}
+
+function countAmmoPickups(plan) {
+  return plan.entities.filter((entity) => entity.type === ENTITY.PICKUP && entity.stat === "ammo").length;
+}
+
+function getHostiles(plan) {
+  return plan.entities.filter((entity) => entity.type === ENTITY.ENEMY || entity.type === ENTITY.SHOOTER || entity.type === ENTITY.BOSS);
+}
+
 function countRunwaySections(targets, trackLength) {
   return targets.reduce(
     (sections, entity) => {
@@ -151,4 +238,9 @@ function countRunwaySections(targets, trackLength) {
     },
     [0, 0, 0],
   );
+}
+
+function getSmallestGap(entities) {
+  const positions = entities.map((entity) => entity.z).sort((a, b) => a - b);
+  return positions.slice(1).reduce((smallest, z, index) => Math.min(smallest, z - positions[index]), Infinity);
 }

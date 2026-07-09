@@ -39,6 +39,8 @@ export const STAT_LABELS = Object.freeze({
   power: "Power",
   doubleWeapon: "Double",
   assistants: "Assistant",
+  baseLife: "Life",
+  breachDamage: "Breach",
   income: "Income",
   score: "Score",
 });

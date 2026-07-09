@@ -11,6 +11,11 @@ describe("buildStats", () => {
     upgrades.power = 5;
     upgrades.doubleWeapon = 1;
     upgrades.assistants = 2;
+    upgrades.assistantAmmo = 3;
+    upgrades.baseLife = 4;
+    upgrades.wallDamage = 2;
+    upgrades.shieldDamage = 2;
+    upgrades.breachDamage = 2;
 
     const stats = buildStats(upgrades);
 
@@ -18,8 +23,12 @@ describe("buildStats", () => {
     expect(stats.range).toBeGreaterThan(14);
     expect(stats.ammo).toBeGreaterThan(80);
     expect(stats.power).toBeGreaterThan(12);
-    expect(stats.projectileCount).toBe(2);
+    expect(stats.projectileCount).toBe(1);
     expect(stats.assistants).toBe(2);
+    expect(stats.assistantAmmo).toBe(42);
+    expect(stats.baseLife).toBe(20);
+    expect(stats.wallDamageMultiplier).toBeGreaterThan(1.4);
+    expect(stats.shieldDamageMultiplier).toBeGreaterThan(1.5);
   });
 
   it("keeps debuffs inside playable lower bounds", () => {
@@ -28,12 +37,29 @@ describe("buildStats", () => {
       range: -99,
       power: -99,
       income: -99,
+      assistantAmmo: -99,
+      baseLife: -99,
+      wallDamage: -99,
+      shieldDamage: -99,
     });
 
     expect(stats.fireRate).toBe(0.8);
     expect(stats.range).toBe(5);
     expect(stats.power).toBe(1);
     expect(stats.incomeMultiplier).toBe(0.5);
+    expect(stats.assistantAmmo).toBe(0);
+    expect(stats.baseLife).toBe(0);
+    expect(stats.wallDamageMultiplier).toBe(1);
+    expect(stats.shieldDamageMultiplier).toBe(1);
+  });
+
+  it("caps run-farmed Duplas at one extra weapon", () => {
+    const upgrades = createUpgradeLevels();
+    const base = buildStats(upgrades);
+    const doubled = buildStats(upgrades, { doubleWeapon: 3 });
+
+    expect(base.projectileCount).toBe(1);
+    expect(doubled.projectileCount).toBe(2);
   });
 
   it("applies weapon identity tradeoffs", () => {
@@ -45,6 +71,8 @@ describe("buildStats", () => {
 
     expect(pistol.fireRate).toBeGreaterThan(shotgun.fireRate);
     expect(shotgun.power).toBeGreaterThan(pistol.power);
+    expect(shotgun.power).toBeGreaterThan(rifle.power);
+    expect(shotgun.projectileCount).toBe(1);
     expect(machineGun.fireRate).toBeGreaterThan(pistol.fireRate);
     expect(machineGun.power).toBeLessThan(pistol.power);
     expect(rifle.range).toBeGreaterThan(pistol.range);

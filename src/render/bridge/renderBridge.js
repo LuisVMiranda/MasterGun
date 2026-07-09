@@ -1,9 +1,11 @@
 import * as THREE from "three";
 import { TARGET_SCALE } from "../../game/content/constants.js";
+import { findWeapon } from "../../game/content/weapons.js";
 import { createThreeApp } from "../app/createThreeApp.js";
 import { createAssistantObject, createBulletObject, createDamageNumberObject } from "../objects/actors.js";
 import { createEntityObject, createPlayerObject } from "../objects/actors.js";
 import { disposeEntityObject, updateDamageNumberObject, updateHealthObject } from "../objects/actors.js";
+import { setPlayerWeaponObject } from "../objects/actors.js";
 import { createWorld } from "../objects/world.js";
 
 export function createRenderBridge(host) {
@@ -22,7 +24,7 @@ export function createRenderBridge(host) {
     update(state) {
       const run = state.run;
       world.update(run);
-      updatePlayer(player, assistants, run);
+      updatePlayer(player, assistants, state);
       syncEntities(app.scene, entityMeshes, run?.entities ?? []);
       syncBullets(app.scene, bulletMeshes, getProjectiles(run));
       syncDamageNumbers(app.scene, damageMeshes, run?.damageNumbers ?? []);
@@ -32,12 +34,20 @@ export function createRenderBridge(host) {
   };
 }
 
-function updatePlayer(player, assistants, run) {
+function updatePlayer(player, assistants, state) {
+  const run = state.run;
   const x = run?.player.x ?? 0;
   const recoilZ = run?.player.recoilZ ?? 0;
+  const weaponId = run?.weaponId ?? state.save.equippedWeapon;
+  setPlayerWeaponObject(player, weaponId, hasDoubleWeapon(run, weaponId));
   player.position.set(x, 0.08, -recoilZ);
   player.rotation.z = -x * 0.04;
   syncAssistants(assistants, run);
+}
+
+function hasDoubleWeapon(run, weaponId) {
+  if (!run) return false;
+  return run.stats.projectileCount > findWeapon(weaponId).projectiles;
 }
 
 function syncAssistants(group, run) {

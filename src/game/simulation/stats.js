@@ -7,7 +7,11 @@ export const BASE_STATS = Object.freeze({
   power: 6,
   projectileCount: 1,
   assistants: 0,
+  assistantAmmo: 0,
+  baseLife: 0,
   incomeMultiplier: 1,
+  wallDamageMultiplier: 1,
+  shieldDamageMultiplier: 1,
   weaponId: DEFAULT_WEAPON_ID,
 });
 
@@ -18,9 +22,13 @@ export function buildStats(upgrades, modifiers = {}, weaponId = DEFAULT_WEAPON_I
     range: (BASE_STATS.range + upgradeLevel(upgrades, "range") * 0.65) * weapon.range,
     ammo: Math.round((BASE_STATS.ammo + upgradeLevel(upgrades, "ammo") * 7) * weapon.ammo),
     power: (BASE_STATS.power + upgradeLevel(upgrades, "power") * 1.7) * weapon.power,
-    projectileCount: weapon.projectiles + upgradeLevel(upgrades, "doubleWeapon"),
+    projectileCount: weapon.projectiles,
     assistants: upgradeLevel(upgrades, "assistants"),
+    assistantAmmo: getAssistantAmmo(upgrades),
+    baseLife: upgradeLevel(upgrades, "baseLife") * 5,
     incomeMultiplier: BASE_STATS.incomeMultiplier + upgradeLevel(upgrades, "income") * 0.12,
+    wallDamageMultiplier: getWallDamageMultiplier(upgrades),
+    shieldDamageMultiplier: getShieldDamageMultiplier(upgrades),
     weaponId: weapon.id,
   };
 
@@ -29,17 +37,42 @@ export function buildStats(upgrades, modifiers = {}, weaponId = DEFAULT_WEAPON_I
 
 export function applyModifiers(stats, modifiers) {
   return {
-    fireRate: Math.max(0.8, stats.fireRate + (modifiers.fireRate ?? 0)),
-    range: Math.max(5, stats.range + (modifiers.range ?? 0)),
-    ammo: Math.max(1, stats.ammo + (modifiers.ammo ?? 0)),
-    power: Math.max(1, stats.power + (modifiers.power ?? 0)),
-    projectileCount: Math.max(1, stats.projectileCount + (modifiers.doubleWeapon ?? 0)),
-    assistants: Math.max(0, stats.assistants + (modifiers.assistants ?? 0)),
-    incomeMultiplier: Math.max(0.5, stats.incomeMultiplier + (modifiers.income ?? 0)),
+    fireRate: addWithFloor(stats.fireRate, modifiers, "fireRate", 0.8),
+    range: addWithFloor(stats.range, modifiers, "range", 5),
+    ammo: addWithFloor(stats.ammo, modifiers, "ammo", 1),
+    power: addWithFloor(stats.power, modifiers, "power", 1),
+    projectileCount: Math.max(1, stats.projectileCount + Math.min(1, getModifier(modifiers, "doubleWeapon"))),
+    assistants: addWithFloor(stats.assistants, modifiers, "assistants", 0),
+    assistantAmmo: addWithFloor(stats.assistantAmmo, modifiers, "assistantAmmo", 0),
+    baseLife: addWithFloor(stats.baseLife, modifiers, "baseLife", 0),
+    incomeMultiplier: addWithFloor(stats.incomeMultiplier, modifiers, "income", 0.5),
+    wallDamageMultiplier: addWithFloor(stats.wallDamageMultiplier, modifiers, "wallDamage", 1),
+    shieldDamageMultiplier: addWithFloor(stats.shieldDamageMultiplier, modifiers, "shieldDamage", 1),
     weaponId: stats.weaponId,
   };
 }
 
 function upgradeLevel(upgrades, id) {
   return upgrades[id] ?? 0;
+}
+
+function getAssistantAmmo(upgrades) {
+  if (upgradeLevel(upgrades, "assistants") <= 0) return 0;
+  return 18 + upgradeLevel(upgrades, "assistantAmmo") * 8;
+}
+
+function getWallDamageMultiplier(upgrades) {
+  return BASE_STATS.wallDamageMultiplier + upgradeLevel(upgrades, "wallDamage") * 0.16 + upgradeLevel(upgrades, "breachDamage") * 0.1;
+}
+
+function getShieldDamageMultiplier(upgrades) {
+  return BASE_STATS.shieldDamageMultiplier + upgradeLevel(upgrades, "shieldDamage") * 0.18 + upgradeLevel(upgrades, "breachDamage") * 0.1;
+}
+
+function addWithFloor(base, modifiers, id, floor) {
+  return Math.max(floor, base + getModifier(modifiers, id));
+}
+
+function getModifier(modifiers, id) {
+  return modifiers[id] ?? 0;
 }

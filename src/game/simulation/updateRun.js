@@ -1,7 +1,10 @@
 import { ENTITY, TRACK } from "../content/constants.js";
 import { t } from "../content/i18n.js";
+import { recordAmmoEarned, recordCollision, recordDamage, recordDestroyedTarget } from "./achievements.js";
+import { recordPickupShot, recordProjectileHit } from "./achievements.js";
 import { applyContactEffect, applyDamageReward, pruneMessages } from "./effects.js";
-import { completeRun } from "./gameFlow.js";
+import { completeRun, failRun } from "./gameFlow.js";
+import { applyLifeLoss, recoverLifeByDistance } from "./life.js";
 import { clamp, intersects, lerp } from "./math.js";
 import { getBuildRating } from "./progression.js";
 import { calculateLiveScore, getCollisionPenalty } from "./scoring.js";
@@ -18,7 +21,9 @@ export function updateRunState(state, input, dt) {
   const delta = Math.min(dt, 0.05);
   run.elapsed += delta;
   updatePlayer(run, input, delta);
-  run.distance += run.profile.speed * getRunSpeedScale(run) * delta;
+  const distanceDelta = run.profile.speed * getRunSpeedScale(run) * delta;
+  run.distance += distanceDelta;
+  recoverLifeByDistance(run, distanceDelta);
   updateWeapons(run, delta);
   moveActors(run, delta);
   updateShooters(run, delta);
@@ -29,10 +34,15 @@ export function updateRunState(state, input, dt) {
   resolvePlayerContacts(run);
   updateDamageNumbers(run, delta);
   pruneRun(run, delta);
+  holdFinishForBoss(run);
   run.buildRating = getBuildRating(run.stats);
   run.score = calculateLiveScore(run);
 
-  if (run.distance >= run.profile.trackLength) {
+  if (run.player.life <= 0 && (run.player.lifeDamageTaken ?? 0) > 0) {
+    return failRun(state);
+  }
+
+  if (shouldCompleteRun(run)) {
     return completeRun(state);
   }
 
@@ -94,16 +104,17 @@ function firePrimary(run, dt) {
 }
 
 function fireAssistants(run, dt) {
-  if (run.stats.assistants <= 0) return;
+  if (run.stats.assistants <= 0 || run.player.assistantAmmo <= 0) return;
 
   run.player.assistantTimer -= dt;
   const interval = 0.42;
 
   if (run.player.assistantTimer <= 0) {
-    const count = Math.min(4, run.stats.assistants);
+    const count = Math.min(4, run.stats.assistants, run.player.assistantAmmo);
     for (let index = 0; index < count; index += 1) {
       spawnAssistantShot(run, index);
     }
+    run.player.assistantAmmo -= count;
     run.player.assistantTimer = interval;
   }
 }
@@ -138,6 +149,7 @@ function spawnShot(run, x, zOffset, count, owner) {
 
 function moveActors(run, dt) {
   run.bullets.forEach((bullet) => {
+    bullet.previousZ = bullet.z;
     bullet.z += TRACK.bulletSpeed * dt;
     bullet.remainingRange -= TRACK.bulletSpeed * dt;
     bullet.active = bullet.active && bullet.remainingRange > 0;
@@ -210,7 +222,8 @@ function updateBoss(run, entity, dt) {
 
 function spawnEnemyProjectile(run, shooter) {
   const travelTime = Math.max(0.45, shooter.z / shooter.projectileSpeed);
-  const vx = (run.player.x - shooter.x) / travelTime;
+  const aimX = run.player.x + getEnemyAimError(run, shooter);
+  const vx = (aimX - shooter.x) / travelTime;
   run.enemyProjectiles.push({
     id: run.nextId++,
     owner: "enemy",
@@ -226,6 +239,13 @@ function spawnEnemyProjectile(run, shooter) {
   queueAudio(run, "shot", "enemy", 1);
 }
 
+function getEnemyAimError(run, shooter) {
+  const levelSharpness = clamp((run.level - 1) / 90, 0, 1);
+  const baseError = 1.05 - levelSharpness * 0.78;
+  const bossScale = shooter.type === ENTITY.BOSS ? 0.45 : 1;
+  return Math.sin(run.elapsed * 1.7 + shooter.id * 1.31) * baseError * bossScale;
+}
+
 function resolveBulletHits(run) {
   run.bullets.forEach((bullet) => {
     if (!bullet.active) return;
@@ -238,52 +258,105 @@ function resolveBulletHits(run) {
 }
 
 function findBulletTarget(run, bullet) {
+  const hitBox = getBulletHitBox(bullet);
   return run.entities.find((entity) => {
     const damageable = entity.active && entity.health > 0;
-    return damageable && intersects(bullet, entity);
+    return damageable && intersects(hitBox, entity);
   });
 }
 
+function getBulletHitBox(bullet) {
+  const previousZ = bullet.previousZ ?? bullet.z;
+  const minZ = Math.min(previousZ, bullet.z);
+  const maxZ = Math.max(previousZ, bullet.z);
+
+  return {
+    ...bullet,
+    z: (minZ + maxZ) / 2,
+    depth: bullet.depth + (maxZ - minZ),
+  };
+}
+
 function damageTarget(run, bullet, target) {
-  target.health -= bullet.damage;
+  const damage = getTargetDamage(run, bullet, target);
+  const appliedDamage = Math.min(damage, Math.max(0, target.health));
+  target.health -= damage;
   bullet.active = false;
-  addDamageNumber(run, bullet, target);
+  recordDamage(run, appliedDamage);
+  addDamageNumber(run, damage, target);
   applyAmmoDamageReward(run, bullet, target);
 
   if (target.type === ENTITY.GATE && target.health <= 0) {
-    breakGate(run, target);
+    collectShotGate(run, target);
+    return;
+  }
+
+  if (target.type === ENTITY.PICKUP && target.health <= 0) {
+    collectShotPickup(run, target);
     return;
   }
 
   if (target.health <= 0) {
     target.active = false;
+    recordDestroyedTarget(run, target);
     applyDamageReward(run, target);
   }
+}
+
+function collectShotPickup(run, target) {
+  target.active = false;
+  target.collected = true;
+  recordPickupShot(run);
+  applyContactEffect(run, target);
 }
 
 function breakGate(run, target) {
   target.broken = true;
   target.health = 0;
   target.active = false;
+  recordDestroyedTarget(run, target);
 
   if (target.gateType === "debuff") {
     run.messages.push({ id: `safe-${target.id}`, text: t(run.locale, "message.debuffCleared"), tone: "buff", ttl: 1.2 });
   }
 }
 
-function addDamageNumber(run, bullet, target) {
+function collectShotGate(run, target) {
+  breakGate(run, target);
+  if (target.gateType !== "buff") return;
+
+  target.collected = true;
+  recordPickupShot(run);
+  applyContactEffect(run, target);
+}
+
+function addDamageNumber(run, damage, target) {
   const ttl = 0.72;
   run.damageNumbers.push({
     id: run.nextId++,
-    text: `-${Math.round(bullet.damage)}`,
+    text: `-${Math.round(damage)}`,
     tone: "damage",
-    value: Math.round(bullet.damage),
+    value: Math.round(damage),
     x: target.x,
     y: getDamageHeight(target),
     z: target.z,
     ttl,
     maxTtl: ttl,
   });
+}
+
+function getTargetDamage(run, bullet, target) {
+  return bullet.damage * getMaterialMultiplier(run, target);
+}
+
+function getMaterialMultiplier(run, target) {
+  if (isWallMaterial(target)) return run.stats.wallDamageMultiplier;
+  if (target.enemyKind === "shield") return run.stats.shieldDamageMultiplier;
+  return 1;
+}
+
+function isWallMaterial(target) {
+  return [ENTITY.BARRICADE, ENTITY.SOLID_WALL, ENTITY.FINISH_BLOCK].includes(target.type);
 }
 
 function applyAmmoDamageReward(run, bullet, target) {
@@ -296,6 +369,7 @@ function applyAmmoDamageReward(run, bullet, target) {
 
   target.ammoEarned = earnedTotal;
   run.player.ammo += award;
+  recordAmmoEarned(run, award);
   run.messages.push({ id: `ammo-${target.id}-${bullet.id}`, text: t(run.locale, "message.ammoEarned", { value: award }), tone: "buff", ttl: 1.1 });
   addAmmoGainNumber(run, award, target);
 }
@@ -340,7 +414,11 @@ function resolvePlayerContacts(run) {
 function collectEntity(run, entity) {
   entity.collected = true;
   entity.active = false;
-  if (entity.type !== ENTITY.CASH) triggerPlayerBounce(run, entity);
+  if (shouldBounceOnCollect(entity)) {
+    recordCollision(run);
+    applyBounceLifeLoss(run, entity);
+    triggerPlayerBounce(run, entity);
+  }
   applyContactEffect(run, entity);
 }
 
@@ -355,9 +433,16 @@ function resolveTargetCollisions(run) {
 
 function collideWithTarget(run, entity) {
   const contactHit = (entity.contactHits ?? 0) + 1;
-  const key = contactHit >= CONTACT_LIMIT ? "message.collisionPass" : "message.collisionBounce";
+  const bossContact = entity.type === ENTITY.BOSS;
+  const key = !bossContact && contactHit >= CONTACT_LIMIT ? "message.collisionPass" : "message.collisionBounce";
   entity.contactHits = contactHit;
-  applyScorePenalty(run, getCollisionPenalty(entity, run.level, contactHit), key, entity);
+  recordCollision(run);
+  applyScorePenalty(run, getCollisionPenalty(entity, run.level, contactHit), key, entity, contactHit);
+
+  if (bossContact) {
+    triggerPlayerBounce(run, entity);
+    return;
+  }
 
   if (contactHit >= CONTACT_LIMIT) {
     entity.active = false;
@@ -396,6 +481,8 @@ function resolveEnemyProjectileHits(run) {
   run.enemyProjectiles.forEach((projectile) => {
     if (!projectile.active || !intersects(playerBox, projectile)) return;
     projectile.active = false;
+    recordProjectileHit(run);
+    recordCollision(run);
     applyScorePenalty(run, projectile.penalty, "message.scoreLoss", projectile);
   });
 }
@@ -420,15 +507,28 @@ function isContactEntity(entity) {
   return entity.type === ENTITY.GATE || entity.type === ENTITY.HAZARD || entity.type === ENTITY.PICKUP || entity.type === ENTITY.WEAPON_PICKUP || entity.type === ENTITY.CASH;
 }
 
+function shouldBounceOnCollect(entity) {
+  return ![ENTITY.CASH, ENTITY.PICKUP].includes(entity.type);
+}
+
 function isPenaltyTarget(entity) {
   const targets = [ENTITY.ENEMY, ENTITY.BARRICADE, ENTITY.SOLID_WALL, ENTITY.SHOOTER, ENTITY.FINISH_BLOCK, ENTITY.BOSS];
   return targets.includes(entity.type) && entity.active && entity.health > 0;
 }
 
-function applyScorePenalty(run, value, key, source) {
+function applyBounceLifeLoss(run, source) {
+  const lifeLoss = applyLifeLoss(run, source, 0, 1);
+  run.messages.push({ id: `life-${source.id}-${run.elapsed}`, text: t(run.locale, "message.lifeLoss", { value: lifeLoss }), tone: "debuff", ttl: 1.1 });
+  addLifeLossNumber(run, lifeLoss, source);
+  queueAudio(run, "scoreLoss", "player", 1);
+}
+
+function applyScorePenalty(run, value, key, source, contactHit = 2) {
   run.scorePenalty += value;
+  const lifeLoss = applyLifeLoss(run, source, value, contactHit);
   run.messages.push({ id: `score-${source.id}-${run.elapsed}`, text: formatPenalty(run, key, value), tone: "debuff", ttl: 1.1 });
   addScoreLossNumber(run, value, source);
+  addLifeLossNumber(run, lifeLoss, source);
   queueAudio(run, "scoreLoss", "player", 1);
 }
 
@@ -447,6 +547,21 @@ function addScoreLossNumber(run, value, source) {
   });
 }
 
+function addLifeLossNumber(run, value, source) {
+  const ttl = 0.86;
+  run.damageNumbers.push({
+    id: run.nextId++,
+    text: t(run.locale, "message.lifeLoss", { value }),
+    tone: "penalty",
+    value,
+    x: source.x ?? run.player.x,
+    y: 2.25,
+    z: source.z ?? TRACK.playerZ + 0.8,
+    ttl,
+    maxTtl: ttl,
+  });
+}
+
 function formatPenalty(run, key, value) {
   return t(run.locale, key, { value });
 }
@@ -455,6 +570,25 @@ function pruneRun(run, dt) {
   run.bullets = run.bullets.filter((bullet) => bullet.active).slice(-220);
   run.enemyProjectiles = run.enemyProjectiles.filter((projectile) => projectile.active).slice(-120);
   run.damageNumbers = run.damageNumbers.filter((damage) => damage.ttl > 0).slice(-80);
-  run.entities = run.entities.filter((entity) => entity.active && entity.z > TRACK.missZ);
+  run.entities = run.entities.filter((entity) => entity.active && (entity.type === ENTITY.BOSS || entity.z > TRACK.missZ));
   pruneMessages(run, dt);
+}
+
+function holdFinishForBoss(run) {
+  if (hasMandatoryBossAlive(run) && run.distance >= run.profile.trackLength) {
+    run.distance = run.profile.trackLength;
+  }
+}
+
+function shouldCompleteRun(run) {
+  if (run.profile.challenge) return !hasMandatoryBossAlive(run) && !hasBossCashAlive(run);
+  return run.distance >= run.profile.trackLength && !hasMandatoryBossAlive(run);
+}
+
+function hasMandatoryBossAlive(run) {
+  return run.profile.challenge && run.entities.some((entity) => entity.type === ENTITY.BOSS && entity.active && entity.health > 0);
+}
+
+function hasBossCashAlive(run) {
+  return run.entities.some((entity) => entity.type === ENTITY.CASH && entity.sourceType === ENTITY.BOSS && entity.active);
 }

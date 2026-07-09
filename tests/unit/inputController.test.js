@@ -3,8 +3,10 @@ import {
   isTextEntryTarget,
   pointerToTrackX,
   readGamepadAxis,
+  readGamepadButtons,
   readGamepadUiAxisX,
   readGamepadUiAxisY,
+  readGamepadScrollAxisY,
   readKeyboardAxis,
   updateTrackedKey,
 } from "../../src/game/input/inputController.js";
@@ -32,6 +34,22 @@ describe("input direction", () => {
     expect(readGamepadUiAxisX({ axes: [0], buttons: createButtons([14]) })).toBe(-1);
     expect(readGamepadUiAxisY({ axes: [0, 1], buttons: [] })).toBe(1);
     expect(readGamepadUiAxisY({ axes: [0, 0], buttons: createButtons([12]) })).toBe(-1);
+  });
+
+  it("maps right stick and menu buttons for overlay control", () => {
+    expect(readGamepadScrollAxisY({ axes: [0, 0, 0, 0.8], buttons: [] })).toBe(1);
+    expect(readGamepadScrollAxisY({ axes: [0, 0, 0, -0.8], buttons: [] })).toBe(-1);
+    expect(readGamepadScrollAxisY({ axes: [0, 0, 0, 0.1], buttons: [] })).toBe(0);
+  });
+
+  it("maps PlayStation Cross to OK and Triangle to close", () => {
+    const cross = readGamepadButtons({ buttons: createButtons([0]) });
+    const triangle = readGamepadButtons({ buttons: createButtons([3]) });
+
+    expect(cross.confirmPressed).toBe(true);
+    expect(cross.closePressed).toBe(false);
+    expect(triangle.confirmPressed).toBe(false);
+    expect(triangle.closePressed).toBe(true);
   });
 
   it("does not block profile text entry with movement keys", () => {

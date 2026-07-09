@@ -1,0 +1,398 @@
+@font-face {
+  font-family: "MasterGun Tungsten Condensed";
+  src: url("/fonts/TungstenCondensed-Medium.otf") format("opentype");
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "MasterGun Tungsten Medium";
+  src: url("/fonts/Tungsten-Medium.otf") format("opentype");
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "MasterGun Rajdhani";
+  src: url("/fonts/rajdhani/Rajdhani-Medium.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "MasterGun Rajdhani";
+  src: url("/fonts/rajdhani/Rajdhani-SemiBold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "MasterGun Rajdhani";
+  src: url("/fonts/rajdhani/Rajdhani-Bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700 900;
+  font-display: block;
+}
+
+:root {
+  --font-display: "MasterGun Tungsten Condensed", "MasterGun Tungsten Medium", "Tungsten Condensed", "Tungsten-Medium", "Tungsten Medium", Tungsten, sans-serif;
+}
+
+h1,
+h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.weapon-button {
+  display: inline-grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.game-shell[data-input-source="controller"] button:focus,
+.game-shell[data-input-source="controller"] select:focus,
+.game-shell[data-input-source="keyboard"] button:focus,
+.game-shell[data-input-source="keyboard"] select:focus {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
+  box-shadow:
+    0 0 0 6px rgba(255, 203, 61, 0.18),
+    0 0 22px rgba(36, 232, 107, 0.34);
+  filter: brightness(1.12);
+}
+
+.weapon-sprite {
+  width: 48px;
+  height: 36px;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.24));
+}
+
+.upgrade-card .weapon-sprite {
+  width: 56px;
+  height: 42px;
+  vertical-align: middle;
+}
+
+.top-hud .icon-button {
+  margin-left: 0;
+}
+
+.top-hud [data-action="missions"] {
+  margin-left: auto;
+}
+
+.life {
+  color: #ff86a2;
+}
+
+.control-hints {
+  position: absolute;
+  top: 82px;
+  left: 14px;
+  z-index: 3;
+  width: min(250px, calc(100% - 28px));
+  pointer-events: none;
+}
+
+.control-hint-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: rgba(9, 16, 27, 0.58);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(12px);
+}
+
+.control-hint-card strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--gold);
+  font-size: 0.9rem;
+}
+
+.control-hint-card ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.control-hint-card li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.control-hint-card kbd {
+  min-width: 48px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 7px;
+  padding: 3px 6px;
+  color: #06121f;
+  font: inherit;
+  font-size: 0.74rem;
+  text-align: center;
+  background: linear-gradient(135deg, var(--green), var(--gold));
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+}
+
+.control-hint-card span {
+  min-width: 0;
+}
+
+.profile-actions {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 10px;
+}
+
+.leaderboard-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.leaderboard-panel {
+  display: grid;
+  width: min(620px, 100%);
+  gap: 16px;
+  padding: 20px;
+}
+
+.leaderboard-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.leaderboard-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.leaderboard-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.leaderboard-list b {
+  color: var(--gold);
+}
+
+.mission-summary {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.mission-summary span {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--gold);
+  font-weight: 900;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mission-panel {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+}
+
+.mission-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mission-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 10px;
+}
+
+.mission-filters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.mission-filters .is-active {
+  color: #06121f;
+  background: linear-gradient(135deg, var(--green), var(--gold));
+}
+
+.mission-empty {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.mission-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mission-card p,
+.mission-panel > p {
+  color: var(--muted);
+}
+
+.mission-card strong {
+  color: var(--gold);
+}
+
+.mission-card.is-complete {
+  border-color: rgba(36, 232, 107, 0.6);
+  background: rgba(36, 232, 107, 0.12);
+}
+
+.mission-meter {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.mission-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--blue), var(--green), var(--gold));
+}
+
+.victory-panel {
+  position: relative;
+  display: grid;
+  width: min(760px, 100%);
+  min-height: 420px;
+  place-items: center;
+  gap: 18px;
+  overflow: hidden;
+  padding: 34px;
+  text-align: center;
+}
+
+.victory-panel p {
+  max-width: 560px;
+  color: var(--muted);
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.firework-field,
+.firework-field span,
+.firework-field span::before,
+.firework-field span::after {
+  position: absolute;
+  pointer-events: none;
+}
+
+.firework-field {
+  inset: 0;
+}
+
+.firework-field span {
+  top: calc(10% + (var(--i) % 5) * 17%);
+  left: calc(8% + (var(--i) % 7) * 14%);
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  color: hsl(calc(var(--i) * 32), 92%, 62%);
+  animation: firework-pop 1.35s infinite ease-out;
+  animation-delay: calc(var(--i) * -0.13s);
+}
+
+.firework-field span::before,
+.firework-field span::after {
+  inset: -20px;
+  content: "";
+  border-radius: inherit;
+  box-shadow:
+    0 -24px currentColor,
+    17px -17px currentColor,
+    24px 0 currentColor,
+    17px 17px currentColor,
+    0 24px currentColor,
+    -17px 17px currentColor,
+    -24px 0 currentColor,
+    -17px -17px currentColor;
+}
+
+.firework-field span::after {
+  transform: rotate(22deg) scale(0.72);
+}
+
+@keyframes firework-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.1);
+  }
+
+  30% {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.2);
+  }
+}
+
+@media (max-width: 720px) {
+  .top-hud [data-action="missions"] {
+    margin-left: 0;
+  }
+
+  .mission-list {
+    grid-template-columns: 1fr;
+  }
+
+  .control-hints {
+    top: 176px;
+    width: min(260px, calc(100% - 24px));
+  }
+
+  .profile-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .victory-panel {
+    min-height: 360px;
+    padding: 22px;
+  }
+}

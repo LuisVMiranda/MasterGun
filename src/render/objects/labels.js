@@ -37,7 +37,7 @@ function drawLabel(context, text, width, height, options) {
   context.lineWidth = 10;
   context.stroke();
   context.fillStyle = foreground;
-  context.font = `900 ${fontSize}px Roboto, Arial, sans-serif`;
+  context.font = `800 ${fontSize}px "MasterGun Rajdhani", "Rajdhani", "Roboto Condensed", Roboto, Arial, sans-serif`;
   context.textAlign = "center";
   context.textBaseline = "middle";
   context.fillText(text, width / 2, height / 2, width - 78);

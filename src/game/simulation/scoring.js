@@ -1,9 +1,11 @@
 import { ENTITY } from "../content/constants.js";
+import { getLifeRatio } from "./life.js";
 
 export function calculateLiveScore(run) {
   const progress = Math.floor(run.distance * 1.8);
   const finish = run.finishTier * 85;
-  const score = progress + run.destroyedValue + finish - run.scorePenalty;
+  const lifeBonus = Math.round(getLifeRatio(run) * 90);
+  const score = progress + run.destroyedValue + finish + lifeBonus - run.scorePenalty;
   return Math.max(0, Math.round(score));
 }
 
