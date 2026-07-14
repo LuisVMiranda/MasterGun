@@ -37,7 +37,7 @@ set "URL=http://%HOST%:%PORT%/"
 
 if not defined SKIP_SERVER_START (
   echo Starting Master Gun server on !URL!
-  start "Master Gun Server" cmd /k "cd /d ""%~dp0"" && echo Close this window to stop the Master Gun server. && corepack pnpm dev -- --port %PORT% --strictPort"
+  start "Master Gun Server" cmd /k "cd /d ""%~dp0"" && echo Close this window to stop the Master Gun server. && corepack pnpm dev --port %PORT% --strictPort"
   timeout /t 3 /nobreak >nul
 )
 

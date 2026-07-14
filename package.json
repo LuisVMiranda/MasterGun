@@ -10,6 +10,9 @@
     "lint": "eslint .",
     "test": "vitest run --configLoader native",
     "test:e2e": "node tests/e2e/smoke.mjs",
+    "art:build": "node scripts/art-build.mjs",
+    "art:validate": "node scripts/art-validate.mjs",
+    "art:validate:strict": "node scripts/art-validate.mjs --strict",
     "quality": "node scripts/check-quality.mjs",
     "check": "pnpm lint && pnpm test && pnpm build && pnpm test:e2e && pnpm quality"
   },

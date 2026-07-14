@@ -4,9 +4,14 @@ import { LOCALES, t, tStat } from "../../src/game/content/i18n.js";
 import { UPGRADE_DEFINITIONS } from "../../src/game/content/upgrades.js";
 import { WEAPON_DEFINITIONS } from "../../src/game/content/weapons.js";
 
-const INFO_ITEMS = ["enemies", "variants", "health", "life", "collision", "ammo", "assistants", "materials", "duration", "buffs", "debuffs", "boss"];
+const INFO_ITEMS = ["enemies", "variants", "health", "life", "collision", "ammo", "soldiers", "recruits", "materials", "duration", "buffs", "debuffs", "boss"];
 const UI_KEYS = [
   "action.retry",
+  "action.backModes",
+  "action.previousOffer",
+  "action.nextOffer",
+  "effect.specialShotInstruction",
+  "effect.specialShotTitle",
   "hud.life",
   "hint.controllerClose",
   "hint.controllerConfirm",
@@ -24,7 +29,24 @@ const UI_KEYS = [
   "mission.filter.incomplete",
   "mission.filter.complete",
   "shop.failed",
+  "shop.highlight.ammo",
+  "shop.highlight.collisions",
+  "shop.highlight.damage",
+  "shop.highlight.targets",
   "shop.life",
+  "shop.victorySubtitle",
+  "shop.victoryTitle",
+  "sound.effects",
+  "sound.master",
+  "sound.music",
+  "sound.subtitle",
+  "sound.title",
+  "mode.selectTitle",
+  "mode.arcade.title",
+  "mode.weekly.description",
+  "mode.weaponMastery.title",
+  "mode.bossRush.title",
+  "mode.endless.title",
 ];
 
 describe("localization", () => {

@@ -15,5 +15,12 @@ export function choose(list, random) {
 }
 
 export function formatCash(value) {
-  return `$${Math.max(0, Math.floor(value)).toLocaleString("en-US")}`;
+  return `$${formatCashAmount(value)}`;
+}
+
+export function formatCashAmount(value) {
+  const amount = Math.max(0, Math.floor(Number(value) || 0));
+  if (amount < 100000) return amount.toLocaleString("en-US");
+  const thousands = Math.round(amount / 100) / 10;
+  return `${thousands.toLocaleString("en-US", { maximumFractionDigits: 1 })}k`;
 }

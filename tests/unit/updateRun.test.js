@@ -27,15 +27,19 @@ describe("updateRunState", () => {
     expect(state.run.stats.power).toBeGreaterThan(10);
   });
 
-  it("completes a run and moves to the shop", () => {
-    const state = startRun(createAppState(createDefaultSave()), 44);
+  it("completes a run and moves to the victory prompt", () => {
+    const save = createDefaultSave();
+    save.upgrades.assistants = 1;
+    const state = startRun(createAppState(save), 44);
     state.run.distance = state.run.profile.trackLength - 0.1;
 
     const next = updateRunState(state, idleInput, 1);
 
-    expect(next.phase).toBe(PHASE.SHOP);
+    expect(next.phase).toBe(PHASE.VICTORY);
     expect(next.save.cash).toBeGreaterThan(150);
     expect(next.save.level).toBe(2);
+    expect(next.run.soldiers).toHaveLength(0);
+    expect(Number.isFinite(next.lastSummary.highlights.targets)).toBe(true);
   });
 
   it("blocks checkpoint completion until the boss is defeated", () => {
@@ -100,26 +104,23 @@ describe("updateRunState", () => {
     expect(state.run.damageNumbers.some((damage) => damage.value === 8)).toBe(true);
   });
 
-  it("reloads assistant shooting when assistant ammo gates are shot", () => {
-    const save = createDefaultSave();
-    save.upgrades.assistants = 1;
-    const state = startRun(createAppState(save), 200);
-    const gate = createContactGate("buff", { stat: "assistantAmmo", value: 4 });
+  it("applies soldier training gates and keeps soldier fire unlimited", () => {
+    const state = startRun(createAppState(createDefaultSave()), 200);
+    const gate = createContactGate("buff", { stat: "soldierTraining", value: 4 });
     gate.z = 1.1;
     gate.health = 1;
     state.run.player.ammo = 0;
-    state.run.player.assistantAmmo = 0;
-    state.run.player.assistantTimer = 9;
+    state.run.soldiers = [{ id: 980, x: 0, z: -0.5, width: 0.22, depth: 0.24, health: 1, maxHealth: 1, shotTimer: 999, active: true }];
     state.run.entities = [gate];
     state.run.bullets = [createPlayerBullet(951)];
 
     updateRunState(state, idleInput, 0.016);
-    expect(state.run.player.assistantAmmo).toBe(4);
-    expect(state.run.player.assistantTimer).toBe(0);
+    expect(state.run.modifiers.soldierTraining).toBe(4);
+    expect(state.run.stats.soldierDamageMultiplier).toBeGreaterThan(1.1);
 
+    state.run.soldiers.forEach((soldier) => { soldier.shotTimer = -1; });
     updateRunState(state, idleInput, 0.016);
-    expect(state.run.bullets.some((bullet) => bullet.owner === "assistant")).toBe(true);
-    expect(state.run.player.assistantAmmo).toBe(3);
+    expect(state.run.bullets.some((bullet) => bullet.owner === "soldier")).toBe(true);
   });
 
   it("bounces the player on first live target collision", () => {
@@ -181,6 +182,7 @@ describe("updateRunState", () => {
     expect(state.run.player.recoilTimer).toBe(0);
     expect(state.run.metrics.pickupsShot).toBe(1);
     expect(state.run.metrics.greenBuffs).toBe(1);
+    expect(state.run.audioEvents.some((event) => event.type === "pickup")).toBe(false);
   });
 
   it("awards ammo proportionally to finite ammo target damage", () => {
@@ -252,26 +254,27 @@ describe("updateRunState", () => {
     cash.z = 0;
     const completed = updateRunState(afterKill, idleInput, 0.016);
 
-    expect(completed.phase).toBe(PHASE.SHOP);
+    expect(completed.phase).toBe(PHASE.VICTORY);
     expect(completed.save.level).toBe(6);
   });
 
-  it("spends dedicated assistant ammo when assistants fire", () => {
-    const save = createDefaultSave();
-    save.upgrades.assistants = 2;
-    const state = startRun(createAppState(save), 196);
-    state.run.player.assistantTimer = -1;
-    state.run.player.assistantAmmo = 1;
+  it("fires unlimited smaller soldier projectiles", () => {
+    const state = startRun(createAppState(createDefaultSave()), 196);
+    state.run.soldiers = [{ id: 981, x: 0, z: -0.5, width: 0.22, depth: 0.24, health: 1, maxHealth: 1, shotTimer: -1, active: true }];
+    state.run.soldiers.forEach((soldier) => { soldier.shotTimer = -1; });
 
     updateRunState(state, idleInput, 0.016);
 
-    expect(state.run.player.assistantAmmo).toBe(0);
-    expect(state.run.bullets.filter((bullet) => bullet.owner === "assistant")).toHaveLength(1);
+    const soldierBullet = state.run.bullets.find((bullet) => bullet.owner === "soldier");
+    expect(soldierBullet.width).toBe(0.07);
+    expect(soldierBullet.depth).toBe(0.09);
+    expect(soldierBullet.visualKind).toBe("soldier");
+    expect(Number.isFinite(soldierBullet.bornAt)).toBe(true);
 
-    state.run.player.assistantTimer = -1;
+    state.run.soldiers.forEach((soldier) => { soldier.shotTimer = -1; });
     updateRunState(state, idleInput, 0.016);
 
-    expect(state.run.bullets.filter((bullet) => bullet.owner === "assistant")).toHaveLength(1);
+    expect(state.run.bullets.filter((bullet) => bullet.owner === "soldier")).toHaveLength(2);
   });
 
   it("applies material-specific damage upgrades to walls and shielded enemies", () => {
@@ -320,12 +323,24 @@ describe("updateRunState", () => {
     expect(state.phase).toBe(PHASE.RUNNING);
   });
 
-  it("makes early enemy shots less exact than late-game shots", () => {
-    const earlyError = getEnemyShotError(1);
-    const lateError = getEnemyShotError(120);
+  it("fires normal enemy shots straight while bosses can aim", () => {
+    const normalState = startRun(createAppState(createDefaultSave()), 5301);
+    normalState.run.player.x = 1.2;
+    normalState.run.player.ammo = 0;
+    normalState.run.entities = [createShooterTarget()];
+    updateRunState(normalState, idleInput, 0.016);
 
-    expect(earlyError).toBeGreaterThan(0.75);
-    expect(lateError).toBeLessThan(earlyError * 0.35);
+    const bossSave = createDefaultSave();
+    bossSave.level = 5;
+    const bossState = startRun(createAppState(bossSave), 5305);
+    bossState.run.player.x = 1.2;
+    bossState.run.player.ammo = 0;
+    bossState.run.entities = [createBossTarget({ z: 12 })];
+    bossState.run.entities[0].shootCooldown = -1;
+    updateRunState(bossState, idleInput, 0.016);
+
+    expect(normalState.run.enemyProjectiles[0].vx).toBe(0);
+    expect(Math.abs(bossState.run.enemyProjectiles[0].vx)).toBeGreaterThan(0.1);
   });
 
   it("recovers life as runway distance increases", () => {
@@ -416,6 +431,8 @@ describe("updateRunState", () => {
     const playerBullets = state.run.bullets.filter((bullet) => bullet.owner === "player");
     expect(playerBullets).toHaveLength(1);
     expect(playerBullets[0].damage).toBeGreaterThan(13);
+    expect(playerBullets[0].visualKind).toBe("shotgun");
+    expect(playerBullets[0].weaponId).toBe("shotgun");
   });
 
   it("uses forgiving early collision penalties", () => {
@@ -508,24 +525,6 @@ function createShooterTarget(options = {}) {
     projectileSpeed: 12,
     active: true,
   };
-}
-
-function getEnemyShotError(level) {
-  const save = createDefaultSave();
-  save.level = level;
-  const state = startRun(createAppState(save), 5300 + level);
-  state.run.player.x = 1.2;
-  state.run.player.targetX = 1.2;
-  state.run.player.ammo = 0;
-  state.run.entities = [createShooterTarget()];
-
-  updateRunState(state, idleInput, 0.016);
-
-  const shooter = state.run.entities[0];
-  const projectile = state.run.enemyProjectiles[0];
-  const travelTime = Math.max(0.45, shooter.z / shooter.projectileSpeed);
-  const perfectVx = (state.run.player.x - shooter.x) / travelTime;
-  return Math.abs(projectile.vx - perfectVx);
 }
 
 function createEnemyProjectile() {

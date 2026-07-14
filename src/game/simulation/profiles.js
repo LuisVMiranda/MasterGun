@@ -1,4 +1,5 @@
 import { createDefaultSave } from "./economy.js";
+import { normalizeModeProgress } from "./modeProgress.js";
 
 const MAX_LEADERBOARD = 10;
 
@@ -77,6 +78,7 @@ function createSnapshot(save) {
     equippedWeapon: save.equippedWeapon,
     achievements: { ...save.achievements, completedIds: [...(save.achievements?.completedIds ?? [])] },
     missionStats: { ...(save.missionStats ?? {}) },
+    modeProgress: normalizeModeProgress(save.modeProgress, save.level),
     settings: { ...save.settings },
   };
 }

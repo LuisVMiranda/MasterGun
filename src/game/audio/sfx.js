@@ -1,12 +1,13 @@
 const SHOT_TONES = Object.freeze({
-  player: { frequency: 520, duration: 0.045, gain: 0.055 },
-  assistant: { frequency: 680, duration: 0.035, gain: 0.04 },
+  player: { frequency: 520, duration: 0.065, gain: 0.1 },
+  soldier: { frequency: 680, duration: 0.035, gain: 0.035 },
   enemy: { frequency: 180, duration: 0.07, gain: 0.045 },
   scoreLoss: { frequency: 120, duration: 0.12, gain: 0.07 },
 });
 
 export function createSfx() {
   let context;
+  let resumePromise;
   const getContext = () => {
     context = context ?? createContext();
     return context;
@@ -14,12 +15,20 @@ export function createSfx() {
 
   return {
     arm() {
-      resumeContext(getContext());
+      resumePromise = ensureContextReady(getContext(), resumePromise);
     },
     play(events, volume = 0.7) {
-      playEvents(getContext(), events, volume);
+      resumePromise = playWhenReady(getContext(), events, volume, resumePromise);
     },
   };
+}
+
+function playWhenReady(context, events, volume, pending) {
+  if (!events.length || !context) return pending;
+  const ready = ensureContextReady(context, pending);
+  if (!ready) playEvents(context, events, volume);
+  else void ready.then(() => playEvents(context, events, volume));
+  return ready;
 }
 
 function createContext() {
@@ -27,14 +36,12 @@ function createContext() {
   return AudioContext ? new AudioContext() : null;
 }
 
-function resumeContext(context) {
-  if (context?.state === "suspended") void context.resume();
+function ensureContextReady(context, pending) {
+  if (!context || context.state !== "suspended") return null;
+  return pending ?? context.resume().catch(() => undefined);
 }
 
 function playEvents(context, events, volume) {
-  if (!events.length || !context) return;
-
-  resumeContext(context);
   events.forEach((event) => playEvent(context, event, volume));
 }
 

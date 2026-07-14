@@ -32,7 +32,7 @@ function getHintKeys(mode, hasOverlay) {
 
 function hasScrollableOverlay(state) {
   if (state.ui?.infoOpen || state.ui?.missionsOpen || state.ui?.leaderboardOpen) return true;
-  return [PHASE.MENU, PHASE.PAUSED, PHASE.SHOP].includes(state.phase);
+  return [PHASE.MENU, PHASE.PAUSED, PHASE.VICTORY, PHASE.SHOP].includes(state.phase);
 }
 
 function renderHintItem(text) {

@@ -2,6 +2,7 @@ import { getMissionCopy } from "../game/content/achievements.js";
 import { t } from "../game/content/i18n.js";
 import { getMissionCards, getMissionSummary } from "../game/simulation/achievements.js";
 import { icon } from "./icons.js";
+import { renderFireworks } from "./celebration.js";
 
 const FILTERS = ["all", "incomplete", "complete"];
 
@@ -35,12 +36,13 @@ export function renderMissions(state, locale) {
   `;
 }
 
-export function renderVictory(state, locale) {
+export function renderVictory(state, locale, victoryId = "arcadeChampion") {
   return `
-    <div class="panel victory-panel" data-testid="victory-panel">
-      <div class="firework-field">${renderFireworks()}</div>
-      <h1>${t(locale, "mission.winnerTitle")}</h1>
-      <p>${t(locale, "mission.winnerBody", { name: state.save.profileName })}</p>
+    <div class="panel victory-panel layered-victory" data-testid="victory-panel" data-victory="${victoryId}">
+      ${renderFireworks(victoryId === "legend" ? 24 : 16)}
+      <span class="victory-kicker">${t(locale, `victory.${victoryId}.kicker`)}</span>
+      <h1>${t(locale, `victory.${victoryId}.title`)}</h1>
+      <p>${t(locale, `victory.${victoryId}.body`, { name: state.save.profileName })}</p>
       <button class="primary-button" data-action="closeVictory" data-focus-key="closeVictory">${t(locale, "action.close")}</button>
     </div>
   `;
@@ -79,8 +81,4 @@ function filterMissionCards(cards, filter) {
 
 function normalizeFilter(filter) {
   return FILTERS.includes(filter) ? filter : "all";
-}
-
-function renderFireworks() {
-  return Array.from({ length: 14 }, (_, index) => `<span style="--i:${index}"></span>`).join("");
 }

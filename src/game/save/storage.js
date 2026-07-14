@@ -2,6 +2,7 @@ import { SAVE_KEY } from "../content/constants.js";
 import { DEFAULT_WEAPON_ID, WEAPON_DEFINITIONS } from "../content/weapons.js";
 import { normalizeAchievements, normalizeMissionStats } from "../simulation/achievements.js";
 import { createDefaultSave } from "../simulation/economy.js";
+import { normalizeModeProgress } from "../simulation/modeProgress.js";
 
 export function loadSave(storage = localStorage) {
   const fallback = createDefaultSave();
@@ -27,12 +28,13 @@ export function resetSave(storage = localStorage) {
 }
 
 function normalizeSave(value, fallback) {
-  if (!value || value.schemaVersion !== 1) return fallback;
+  if (!value || ![1, 2].includes(value.schemaVersion)) return fallback;
   const weaponsOwned = normalizeWeapons(value.weaponsOwned, fallback.weaponsOwned);
 
   return {
     ...fallback,
     ...value,
+    schemaVersion: 2,
     upgrades: { ...fallback.upgrades, ...value.upgrades },
     weaponsOwned,
     equippedWeapon: weaponsOwned.includes(value.equippedWeapon) ? value.equippedWeapon : fallback.equippedWeapon,
@@ -40,6 +42,7 @@ function normalizeSave(value, fallback) {
     leaderboard: Array.isArray(value.leaderboard) ? value.leaderboard : fallback.leaderboard,
     achievements: normalizeAchievements(value.achievements),
     missionStats: normalizeMissionStats(value.missionStats),
+    modeProgress: normalizeModeProgress(value.modeProgress, value.level),
     settings: { ...fallback.settings, ...value.settings },
   };
 }

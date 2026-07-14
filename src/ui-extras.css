@@ -94,7 +94,7 @@ h2 {
 
 .control-hints {
   position: absolute;
-  top: 82px;
+  bottom: 38px;
   left: 14px;
   z-index: 3;
   width: min(250px, calc(100% - 28px));
@@ -307,11 +307,124 @@ h2 {
   text-align: center;
 }
 
+.run-victory {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px 22px;
+  overflow: hidden;
+  width: 100%;
+  padding: 16px 4px 18px;
+  border-block: 1px solid rgba(255, 203, 61, 0.34);
+}
+
+.run-victory-copy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: start;
+  min-width: 130px;
+}
+
+.run-victory-copy strong {
+  color: var(--gold);
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.run-victory-copy span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.run-highlights {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(90px, 1fr));
+  gap: 8px;
+}
+
+.run-highlights > span {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  justify-content: center;
+  gap: 2px 6px;
+  min-height: 54px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.run-highlights .svg-icon {
+  grid-row: 1 / span 2;
+}
+
+.run-highlights b {
+  color: var(--ink);
+  font-size: 1.1rem;
+}
+
 .victory-panel p {
   max-width: 560px;
   color: var(--muted);
   font-size: 1.2rem;
   font-weight: 800;
+}
+
+.layered-victory { border-top: 3px solid #ffcb3d; overflow: hidden; }
+.layered-victory[data-victory="legend"] { box-shadow: 0 0 42px rgba(255,203,61,.32), inset 0 0 34px rgba(44,230,109,.09); }
+
+.round-victory-panel {
+  isolation: isolate;
+  animation: victory-panel-in 420ms ease-out both;
+  background:
+    radial-gradient(circle at 50% 36%, rgba(255, 203, 61, 0.16), transparent 42%),
+    rgba(12, 22, 38, 0.9);
+}
+
+.round-victory-panel > :not(.firework-field) {
+  position: relative;
+  z-index: 1;
+}
+
+.round-victory-panel h1 {
+  margin: 0;
+  color: var(--gold);
+  animation: victory-title-in 620ms 120ms ease-out both;
+}
+
+.victory-kicker {
+  align-self: end;
+  color: var(--ink);
+  font-size: 1.05rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.victory-continue {
+  align-self: start;
+  min-width: 180px;
+  animation: victory-button-in 420ms 520ms ease-out both;
+}
+
+@keyframes victory-panel-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes victory-title-in {
+  from { opacity: 0; transform: translateY(18px) scale(0.88); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes victory-button-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .firework-field,
@@ -327,10 +440,10 @@ h2 {
 }
 
 .firework-field span {
-  top: calc(10% + (var(--i) % 5) * 17%);
-  left: calc(8% + (var(--i) % 7) * 14%);
-  width: 10px;
-  height: 10px;
+  top: var(--firework-top);
+  left: var(--firework-left);
+  width: 5px;
+  height: 5px;
   border-radius: 999px;
   color: hsl(calc(var(--i) * 32), 92%, 62%);
   animation: firework-pop 1.35s infinite ease-out;
@@ -339,18 +452,18 @@ h2 {
 
 .firework-field span::before,
 .firework-field span::after {
-  inset: -20px;
+  inset: -9px;
   content: "";
   border-radius: inherit;
   box-shadow:
-    0 -24px currentColor,
-    17px -17px currentColor,
-    24px 0 currentColor,
-    17px 17px currentColor,
-    0 24px currentColor,
-    -17px 17px currentColor,
-    -24px 0 currentColor,
-    -17px -17px currentColor;
+    0 -12px currentColor,
+    8px -8px currentColor,
+    12px 0 currentColor,
+    8px 8px currentColor,
+    0 12px currentColor,
+    -8px 8px currentColor,
+    -12px 0 currentColor,
+    -8px -8px currentColor;
 }
 
 .firework-field span::after {
@@ -374,6 +487,8 @@ h2 {
 }
 
 @media (max-width: 720px) {
+  .game-shell.has-overlay .control-hints { opacity: 0; }
+
   .top-hud [data-action="missions"] {
     margin-left: 0;
   }
@@ -383,8 +498,8 @@ h2 {
   }
 
   .control-hints {
-    top: 176px;
-    width: min(260px, calc(100% - 24px));
+    bottom: 38px;
+    width: min(44vw, 210px);
   }
 
   .profile-actions {
@@ -394,5 +509,20 @@ h2 {
   .victory-panel {
     min-height: 360px;
     padding: 22px;
+  }
+
+  .run-victory {
+    grid-template-columns: 1fr;
+  }
+
+  .run-highlights {
+    grid-template-columns: repeat(2, minmax(90px, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .firework-field span {
+    animation: none;
+    opacity: 0.28;
   }
 }

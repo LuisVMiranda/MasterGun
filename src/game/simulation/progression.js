@@ -51,6 +51,6 @@ export function getNextUnlock(level, locale = "en") {
 
 export function getBuildRating(stats) {
   const damage = stats.fireRate * stats.power * stats.projectileCount;
-  const support = stats.assistants * stats.power * 0.8;
+  const support = stats.soldiers * stats.power * 0.8;
   return Math.round(damage + support + stats.range * 0.6 + stats.ammo * 0.12);
 }

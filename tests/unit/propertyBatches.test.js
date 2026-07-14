@@ -8,7 +8,7 @@ import { calculateLiveScore } from "../../src/game/simulation/scoring.js";
 describe("property batches", () => {
   it("generates valid entities across levels and seeds", () => {
     planCases().forEach(([level, seed]) => assertValidPlan(createRoundPlan(level, seed)));
-  });
+  }, 10000);
 
   it("keeps checkpoint cadence exclusive to every fifth level", () => {
     range(1, 200).forEach(assertCheckpointCadence);

@@ -1,4 +1,5 @@
 import { t } from "../game/content/i18n.js";
+import { formatScore } from "./formatters.js";
 import { icon } from "./icons.js";
 
 export function renderLeaderboardButton(locale) {
@@ -26,7 +27,7 @@ function renderLeaderboardRow(entry, index) {
   return `
     <li>
       <span>${index + 1}. ${entry.profileName}</span>
-      <b>${entry.score}</b>
+      <b>${formatScore(entry.score)}</b>
     </li>
   `;
 }

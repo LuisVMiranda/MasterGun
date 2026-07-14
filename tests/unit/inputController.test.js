@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  createInputController,
   isTextEntryTarget,
   pointerToTrackX,
   readGamepadAxis,
@@ -10,6 +11,10 @@ import {
   readKeyboardAxis,
   updateTrackedKey,
 } from "../../src/game/input/inputController.js";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 const target = {
   getBoundingClientRect() {
@@ -77,6 +82,22 @@ describe("input direction", () => {
     expect(isTextEntryTarget({ isContentEditable: true })).toBe(true);
     expect(isTextEntryTarget({ tagName: "canvas" })).toBe(false);
   });
+
+  it("switches globally to pointer input without firing through menu overlays", () => {
+    const globalEvents = createEventTarget();
+    const canvasEvents = createEventTarget(target);
+    vi.stubGlobal("window", globalEvents);
+    vi.stubGlobal("navigator", { getGamepads: () => [] });
+    const controller = createInputController(canvasEvents);
+
+    globalEvents.emit("pointermove", { clientX: 120 });
+    globalEvents.emit("pointerdown", {});
+    expect(controller.read()).toMatchObject({ source: "pointer", pointerActive: true, confirmPressed: false });
+
+    canvasEvents.emit("pointerdown", {});
+    expect(controller.read().confirmPressed).toBe(true);
+    controller.destroy();
+  });
 });
 
 function createKeyEvent(key, target) {
@@ -92,4 +113,20 @@ function createKeyEvent(key, target) {
 
 function createButtons(pressedIndexes) {
   return Array.from({ length: 16 }, (_, index) => ({ pressed: pressedIndexes.includes(index) }));
+}
+
+function createEventTarget(rectSource = null) {
+  const listeners = new Map();
+  return {
+    addEventListener(type, listener) {
+      listeners.set(type, listener);
+    },
+    removeEventListener(type) {
+      listeners.delete(type);
+    },
+    emit(type, event) {
+      listeners.get(type)?.(event);
+    },
+    getBoundingClientRect: rectSource?.getBoundingClientRect,
+  };
 }

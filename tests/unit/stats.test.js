@@ -24,8 +24,11 @@ describe("buildStats", () => {
     expect(stats.ammo).toBeGreaterThan(80);
     expect(stats.power).toBeGreaterThan(12);
     expect(stats.projectileCount).toBe(1);
-    expect(stats.assistants).toBe(2);
-    expect(stats.assistantAmmo).toBe(42);
+    expect(stats.soldiers).toBe(0);
+    expect(stats.soldierTraining).toBe(3);
+    expect(stats.soldierDamageMultiplier).toBeGreaterThan(1.1);
+    expect(stats.soldierFireRateMultiplier).toBeGreaterThan(1.05);
+    expect(stats.soldierBossDamageMultiplier).toBeGreaterThan(1.1);
     expect(stats.baseLife).toBe(20);
     expect(stats.wallDamageMultiplier).toBeGreaterThan(1.4);
     expect(stats.shieldDamageMultiplier).toBeGreaterThan(1.5);
@@ -37,7 +40,7 @@ describe("buildStats", () => {
       range: -99,
       power: -99,
       income: -99,
-      assistantAmmo: -99,
+      soldierTraining: -99,
       baseLife: -99,
       wallDamage: -99,
       shieldDamage: -99,
@@ -47,7 +50,8 @@ describe("buildStats", () => {
     expect(stats.range).toBe(5);
     expect(stats.power).toBe(1);
     expect(stats.incomeMultiplier).toBe(0.5);
-    expect(stats.assistantAmmo).toBe(0);
+    expect(stats.soldierTraining).toBe(0);
+    expect(stats.soldierDamageMultiplier).toBe(1);
     expect(stats.baseLife).toBe(0);
     expect(stats.wallDamageMultiplier).toBe(1);
     expect(stats.shieldDamageMultiplier).toBe(1);

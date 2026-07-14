@@ -6,7 +6,7 @@ const LEVEL_NAMES = Object.freeze([
   "Power Lesson",
   "Income Choice",
   "Double Tease",
-  "Assistant Lane",
+  "Soldier Lane",
   "First Blocks",
   "Wall Weave",
   "Moving Trouble",
@@ -16,7 +16,7 @@ const LEVEL_NAMES = Object.freeze([
   "Elite Barricades",
   "Walker Intro",
   "Score Squeeze",
-  "Assistant Trial",
+  "Soldier Trial",
   "Late Ladder",
   "Locked Jackpot",
   "Walking Wall",
@@ -28,7 +28,7 @@ const LEVEL_NAMES = Object.freeze([
   "Elite Walkers",
   "Ammo Tax",
   "Red Corridor",
-  "Assistant Storm",
+  "Soldier Storm",
   "Finish Crusher",
   "Master Route",
   "Crown Run",
@@ -106,7 +106,7 @@ function getPressureCounts(level, gateCount) {
   const shooterPace = level < 40 ? 16 : level < 80 ? 13 : 10;
   const walkerPace = level < 40 ? 16 : level < 80 ? 13 : 11;
   return {
-    walls: level >= 6 ? Math.min(Math.floor(slots * 0.16), Math.floor(level / 18)) : 0,
+    walls: level >= 8 ? Math.min(Math.floor(slots * 0.1), Math.floor(level / 28)) : 0,
     walkers: level >= 13 ? Math.min(Math.floor(slots * 0.2), Math.floor(level / walkerPace)) : 0,
     shooters: level >= 9 ? Math.min(Math.floor(slots * 0.22), Math.floor(level / shooterPace)) : 0,
     barricades: level >= 4 ? Math.min(Math.floor(slots * 0.24), Math.floor(level / 13) + 1) : 0,
@@ -115,7 +115,7 @@ function getPressureCounts(level, gateCount) {
 
 function getBlockedUpgrades(level, gateCount) {
   if (level < 7) return 0;
-  return Math.min(Math.floor(gateCount * 0.18), Math.floor(level / 28) + 1);
+  return Math.min(Math.floor(gateCount * 0.14), Math.floor(level / 42) + 1);
 }
 
 function getHazardChance(level) {

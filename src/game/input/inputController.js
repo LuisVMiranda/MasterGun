@@ -13,6 +13,7 @@ export function createInputController(target) {
     scrollAxisY: 0,
     pointerX: 0,
     pointerActive: false,
+    pointerConfirmQueued: false,
     confirmPressed: false,
     closePressed: false,
     pausePressed: false,
@@ -26,11 +27,20 @@ export function createInputController(target) {
     state.pointerActive = true;
     state.source = "pointer";
   };
+  const onPointerSource = () => {
+    state.source = "pointer";
+  };
+  const onTargetPointerDown = () => {
+    state.pointerConfirmQueued = true;
+    state.source = "pointer";
+  };
 
   const onKeyDown = (event) => updateTrackedKey(keys, event, true);
   const onKeyUp = (event) => updateTrackedKey(keys, event, false);
 
-  target.addEventListener("pointermove", onPointerMove);
+  window.addEventListener("pointermove", onPointerMove);
+  window.addEventListener("pointerdown", onPointerSource);
+  target.addEventListener("pointerdown", onTargetPointerDown);
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
 
@@ -41,16 +51,20 @@ export function createInputController(target) {
       state.uiAxisY = readKeyboardUiAxisY(keys);
       state.scrollAxisY = 0;
       state.pausePressed = keys.has("Escape");
-      state.confirmPressed = keys.has("Enter") || keys.has(" ");
+      state.confirmPressed = keys.has("Enter") || keys.has(" ") || state.pointerConfirmQueued;
       state.closePressed = false;
       state.optionsPressed = false;
       state.sharePressed = false;
       applyKeyboardSource(state, keys);
       mergeGamepad(state);
-      return { ...state };
+      const snapshot = { ...state };
+      state.pointerConfirmQueued = false;
+      return snapshot;
     },
     destroy() {
-      target.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerdown", onPointerSource);
+      target.removeEventListener("pointerdown", onTargetPointerDown);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     },

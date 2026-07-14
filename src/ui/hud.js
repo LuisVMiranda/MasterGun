@@ -1,17 +1,26 @@
 import { PHASE } from "../game/content/constants.js";
 import { LOCALES, normalizeLocale, t, tStat } from "../game/content/i18n.js";
-import { getOfferCost, getShopOffers } from "../game/content/shop.js";
-import { WEAPON_DEFINITIONS, findWeapon } from "../game/content/weapons.js";
-import { formatCash } from "../game/simulation/math.js";
+import { findWeapon } from "../game/content/weapons.js";
+import { formatCash, formatCashAmount } from "../game/simulation/math.js";
 import { getNextUnlock } from "../game/simulation/progression.js";
+import { getVisibleRunEffects } from "../game/simulation/runEffects.js";
+import { normalizeAudioSettings } from "../game/audio/audioSettings.js";
+import { formatScore } from "./formatters.js";
 import { renderControlHints } from "./hints.js";
 import { icon } from "./icons.js";
 import { renderLeaderboardButton, renderLeaderboardPanel } from "./leaderboardView.js";
 import { renderMissionProgress, renderMissions, renderVictory } from "./missionViews.js";
-import { weaponSprite } from "./weaponSprites.js";
+import { renderEndlessCheckpoint, renderRoundVictoryPrompt } from "./runSummaryView.js";
+import { renderShop } from "./shopView.js";
+import { getDisplayedStatValue } from "./runStats.js";
+import { renderWeaponTools } from "./weaponView.js";
+import { GAME_MODE } from "../game/content/modes.js";
+import { renderModeSelect } from "./modeSelectView.js";
+import { getPendingVictory } from "../game/simulation/victoryProgress.js";
+import { renderAlternateModeLobby } from "./modeLobbyView.js";
 
-const STAT_ORDER = ["fireRate", "range", "ammo", "power", "baseLife", "income", "doubleWeapon", "assistants", "assistantAmmo", "wallDamage", "shieldDamage", "breachDamage"];
-const WIKI_ITEMS = ["enemies", "variants", "health", "life", "collision", "ammo", "assistants", "materials", "duration", "buffs", "debuffs", "boss"];
+const STAT_ORDER = ["fireRate", "range", "ammo", "power", "baseLife", "income", "doubleWeapon", "soldiers", "soldierTraining", "wallDamage", "shieldDamage", "breachDamage"];
+const WIKI_ITEMS = ["enemies", "variants", "health", "life", "collision", "ammo", "soldiers", "recruits", "materials", "duration", "buffs", "debuffs", "boss"];
 
 export function createHud(root, callbacks) {
   root.innerHTML = createShell();
@@ -19,6 +28,7 @@ export function createHud(root, callbacks) {
 
   root.addEventListener("click", (event) => handleClick(event, callbacks, root));
   root.addEventListener("change", (event) => handleChange(event, callbacks));
+  root.addEventListener("input", (event) => handleInput(event, callbacks));
 
   return {
     canvasHost: elements.canvasHost,
@@ -54,10 +64,13 @@ function createShell() {
         <div class="hud-chip score" data-testid="score-chip"></div>
         <button class="icon-button" data-action="missions" data-testid="missions-button" aria-label="Missions">${icon("score")}</button>
         <button class="icon-button" data-action="info" data-testid="info-button" aria-label="Info">${icon("info")}</button>
+        <button class="icon-button" data-action="sound" data-testid="sound-button" aria-label="Sound">${icon("sound")}</button>
         <select class="locale-select" data-change="locale" data-testid="locale-select"></select>
         <button class="icon-button" data-action="pause" aria-label="Pause">II</button>
       </section>
       <section class="control-hints" data-testid="control-hints"></section>
+      <section class="effect-stack" data-testid="effect-stack" aria-live="polite"></section>
+      <section class="special-shot-prompt" data-testid="special-shot-prompt" aria-live="assertive"></section>
       <section class="stat-stack" data-testid="stat-stack"></section>
       <section class="progress-strip">
         <div class="progress-fill" data-testid="progress-fill"></div>
@@ -78,6 +91,9 @@ function collectElements(root) {
     life: root.querySelector("[data-testid='life-chip']"),
     score: root.querySelector("[data-testid='score-chip']"),
     hints: root.querySelector("[data-testid='control-hints']"),
+    effects: root.querySelector("[data-testid='effect-stack']"),
+    specialShot: root.querySelector("[data-testid='special-shot-prompt']"),
+    soundButton: root.querySelector("[data-testid='sound-button']"),
     stats: root.querySelector("[data-testid='stat-stack']"),
     progress: root.querySelector("[data-testid='progress-fill']"),
     messages: root.querySelector("[data-testid='message-stack']"),
@@ -92,15 +108,23 @@ function handleClick(event, callbacks, root) {
 
   const action = button.dataset.action;
   rememberFocus(root, button);
+  callbacks.onUiAction?.(action);
+  if (action === "shopScroll") {
+    scrollShopOffers(root, Number(button.dataset.direction));
+    return;
+  }
   const actions = {
     start: callbacks.onStart,
     pause: callbacks.onPause,
     resume: callbacks.onResume,
     menu: callbacks.onMenu,
     next: callbacks.onNext,
+    continueVictory: callbacks.onContinueVictory,
     reset: callbacks.onReset,
     info: callbacks.onInfo,
     closeInfo: callbacks.onCloseInfo,
+    sound: callbacks.onSound,
+    closeSound: callbacks.onCloseSound,
     missions: callbacks.onMissions,
     closeMissions: callbacks.onCloseMissions,
     missionFilter: () => callbacks.onMissionFilter(button.dataset.filter),
@@ -110,9 +134,26 @@ function handleClick(event, callbacks, root) {
     buy: () => callbacks.onBuy(button.dataset.offer),
     equip: () => callbacks.onEquipWeapon(button.dataset.weapon),
     profileCreate: () => callbacks.onProfileCreate(getProfileInput(root)),
+    modeSelect: () => callbacks.onModeSelect(button.dataset.mode),
+    modeBack: callbacks.onModeBack,
+    modeOption: () => callbacks.onModeSelection(button.dataset.key, parseModeValue(button.dataset.value)),
+    endlessContinue: callbacks.onEndlessContinue,
+    endlessExtract: callbacks.onEndlessExtract,
   };
 
   actions[action]?.();
+}
+
+function handleInput(event, callbacks) {
+  const control = event.target.closest("[data-audio-setting]");
+  if (!control) return;
+  const value = Number(control.value) / 100;
+  const container = control.closest(".volume-control");
+  container?.style.setProperty("--volume", `${control.value}%`);
+  container?.style.setProperty("--angle", `${-135 + Number(control.value) * 2.7}deg`);
+  const output = container?.querySelector("output");
+  if (output) output.textContent = `${control.value}%`;
+  callbacks.onAudioSetting?.(control.dataset.audioSetting, value);
 }
 
 function handleChange(event, callbacks) {
@@ -127,21 +168,36 @@ function updateHud(elements, state) {
   const locale = getLocale(state);
   const run = state.run;
   elements.shell.dataset.inputSource = state.inputSource ?? "pointer";
-  elements.level.innerHTML = `${icon("score")} ${t(locale, "hud.level", { value: state.save.level })}`;
-  elements.cash.innerHTML = `${icon("cash")} ${t(locale, "hud.cash", { value: formatNumber(state.save.cash) })}`;
-  elements.ammo.innerHTML = `${icon("ammo")} ${run ? t(locale, "hud.ammo", { value: Math.ceil(run.player.ammo) }) : t(locale, "hud.ammo", { value: "--" })}`;
+  elements.level.innerHTML = `${icon("score")} ${getModeProgressLabel(state, locale)}`;
+  elements.cash.innerHTML = `${icon("cash")} ${t(locale, "hud.cash", { value: formatCashAmount(state.save.cash) })}`;
+  elements.ammo.innerHTML = `${icon("ammo")} ${getAmmoText(run, locale)}`;
   elements.life.innerHTML = `${icon("life")} ${getLifeText(run, locale)}`;
-  elements.score.innerHTML = `${icon("score")} ${t(locale, "hud.score", { value: run?.score ?? 0 })}`;
+  elements.score.innerHTML = `${icon("score")} ${t(locale, "hud.score", { value: formatScore(run?.score) })}`;
   elements.progress.style.width = `${getProgressPercent(run)}%`;
   elements.hints.innerHTML = renderControlHints(state, locale);
+  elements.effects.innerHTML = renderRunEffects(run, locale);
+  elements.specialShot.innerHTML = renderSpecialShotPrompt(run, locale);
   elements.stats.innerHTML = renderStats(state, locale);
-  elements.messages.innerHTML = renderMessages(run);
+  syncMessages(elements.messages, state.phase === PHASE.RUNNING ? run : null);
   elements.locale.innerHTML = renderLocaleOptions(locale);
   elements.locale.value = locale;
+  elements.soundButton.setAttribute("aria-label", t(locale, "action.sound"));
+}
+
+function getModeProgressLabel(state, locale) {
+  const mode = state.run?.mode ?? state.selectedMode;
+  const renderers = {
+    [GAME_MODE.WEAPON_MASTERY]: () => t(locale, "hud.masteryTrial", { value: state.run?.modeContext?.trial?.number ?? state.modeSelection.masteryTrial }),
+    [GAME_MODE.BOSS_RUSH]: () => t(locale, "hud.bossFight", { value: state.run?.modeContext?.fight?.number ?? state.modeSelection.bossFight }),
+    [GAME_MODE.WEEKLY]: () => t(locale, "hud.weekly"),
+    [GAME_MODE.ENDLESS]: () => t(locale, "hud.endlessSector", { value: state.run?.modeContext?.sector ?? state.save.modeProgress.endless.activeOperation?.sector ?? 1 }),
+  };
+  return renderers[mode]?.() ?? t(locale, "hud.level", { value: state.save.level });
 }
 
 function updateOverlay(elements, state) {
   const content = getOverlayContent(state);
+  elements.shell.classList.toggle("has-overlay", Boolean(content));
   elements.overlay.classList.toggle("is-visible", Boolean(content));
   if (elements.overlay.dataset.content === content) return;
 
@@ -156,32 +212,82 @@ function getOverlayContent(state) {
 
 function getUiOverlayContent(state) {
   const locale = getLocale(state);
-  if (shouldShowVictory(state)) return renderVictory(state, locale);
+  const victory = getVictoryOverlay(state, locale);
+  if (victory) return victory;
+  if (state.ui?.soundOpen) return renderSoundPanel(state, locale);
   if (state.ui?.infoOpen) return renderInfo(state);
   if (state.ui?.missionsOpen) return renderMissions(state, locale);
   if (state.ui?.leaderboardOpen) return renderLeaderboardPanel(state.save, locale);
   return "";
 }
 
+function getVictoryOverlay(state, locale) {
+  if (state.phase === PHASE.VICTORY) return renderRoundVictoryPrompt(state.lastSummary, locale);
+  const pending = getPendingVictory(state.save);
+  if (pending) return renderVictory(state, locale, pending);
+  return "";
+}
+
+export function renderSoundPanel(state, locale) {
+  const settings = normalizeAudioSettings(state.save.settings);
+  return `
+    <div class="panel sound-panel" data-testid="sound-panel">
+      <div class="sound-heading">
+        <div>
+          <h2>${icon("sound")} ${t(locale, "sound.title")}</h2>
+          <p>${t(locale, "sound.subtitle")}</p>
+        </div>
+        <button class="icon-button" data-action="closeSound" data-focus-key="closeSound" aria-label="${t(locale, "action.close")}">X</button>
+      </div>
+      <div class="sound-controls">
+        ${renderVolumeControl("masterVolume", settings.masterVolume, "master", locale, true)}
+        <div class="sound-sliders">
+          ${renderVolumeControl("musicVolume", settings.musicVolume, "music", locale)}
+          ${renderVolumeControl("sfxVolume", settings.sfxVolume, "effects", locale)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderVolumeControl(key, value, label, locale, knob = false) {
+  const percent = Math.round(value * 100);
+  return `
+    <label class="volume-control ${knob ? "master-knob-control" : ""}" style="--volume: ${percent}%; --angle: ${-135 + percent * 2.7}deg">
+      <span>${t(locale, `sound.${label}`)}</span>
+      ${knob ? '<span class="volume-knob" aria-hidden="true"><i></i></span>' : ""}
+      <input type="range" min="0" max="100" step="1" value="${percent}" data-audio-setting="${key}" data-focus-key="audio:${key}" />
+      <output>${percent}%</output>
+    </label>
+  `;
+}
+
 function getPhaseOverlayContent(state) {
   const renderers = {
-    [PHASE.MENU]: renderMenu,
+    [PHASE.MENU]: renderModeSelect,
+    [PHASE.MODE_MENU]: renderModeLobby,
     [PHASE.PAUSED]: renderPause,
     [PHASE.SHOP]: renderShop,
+    [PHASE.ENDLESS_CHECKPOINT]: (state) => renderEndlessCheckpoint(state.lastSummary, getLocale(state)),
   };
   return renderers[state.phase]?.(state) ?? "";
 }
 
-function shouldShowVictory(state) {
-  return Boolean(state.save.achievements?.gameWon && !state.save.achievements?.gameWonSeen);
+function renderModeLobby(state) {
+  if (state.selectedMode === GAME_MODE.ARCADE) return renderArcadeLobby(state);
+  const locale = getLocale(state);
+  return renderAlternateModeLobby(state, locale);
 }
 
-function renderMenu(state) {
+function renderArcadeLobby(state) {
   const locale = getLocale(state);
   const unlock = getNextUnlock(state.save.level, locale);
   return `
     <div class="panel menu-panel">
-      <h1>Master Gun</h1>
+      <div class="mode-lobby-heading">
+        <h1>${t(locale, "mode.arcade.title")}</h1>
+        <button class="secondary-button" data-action="modeBack" data-focus-key="modeBack">${t(locale, "action.backModes")}</button>
+      </div>
       <div class="menu-stats">
         <span>${formatCash(state.save.cash)}</span>
         <span>${t(locale, "menu.bestTier", { value: state.save.bestFinishTier })}</span>
@@ -212,30 +318,6 @@ function renderProfileTools(state, locale) {
   `;
 }
 
-function renderWeaponTools(state, locale) {
-  const owned = new Set(state.save.weaponsOwned ?? []);
-  const buttons = WEAPON_DEFINITIONS.filter((weapon) => owned.has(weapon.id))
-    .map((weapon) => renderWeaponButton(weapon, state.save.equippedWeapon, locale))
-    .join("");
-
-  return `
-    <section class="weapon-panel">
-      <h2>${icon("weapon")} ${t(locale, "menu.weapon")}: ${t(locale, findWeapon(state.save.equippedWeapon).labelKey)}</h2>
-      <div class="button-row">${buttons}</div>
-    </section>
-  `;
-}
-
-function renderWeaponButton(weapon, equippedWeapon, locale) {
-  const equipped = equippedWeapon === weapon.id;
-  const label = t(locale, weapon.labelKey);
-  return `
-    <button class="${equipped ? "primary-button weapon-button" : "secondary-button weapon-button"}" data-action="equip" data-weapon="${weapon.id}" data-focus-key="equip:${weapon.id}">
-      ${weaponSprite(weapon.id, label)}<span>${label}</span>
-    </button>
-  `;
-}
-
 function renderPause(state) {
   const locale = getLocale(state);
   return `
@@ -247,48 +329,6 @@ function renderPause(state) {
         <button class="danger-button" data-action="reset" data-focus-key="reset">${t(locale, "action.reset")}</button>
       </div>
     </div>
-  `;
-}
-
-function renderShop(state) {
-  const locale = getLocale(state);
-  const choices = state.lastSummary?.shopOffers ?? getShopOffers(state.save);
-  const cards = choices.map((offer) => renderShopCard(offer, state, locale)).join("");
-  const summary = state.lastSummary ?? { reward: 0, finishTier: 0, buildRating: 0, score: 0 };
-  const title = summary.failed ? t(locale, "shop.failed") : t(locale, "shop.complete");
-  const nextLabel = summary.failed ? t(locale, "action.retry") : t(locale, "action.next");
-
-  return `
-    <div class="panel shop-panel" data-testid="shop-panel">
-      <div class="shop-heading">
-        <h2>${title}</h2>
-        <span>${t(locale, "shop.earned", { value: formatNumber(summary.reward) })}</span>
-        <span>${t(locale, "shop.score", { value: summary.score })}</span>
-        <span>${t(locale, "shop.life", { value: Math.round((summary.lifeRatio ?? 1) * 100) })}</span>
-        <span>${t(locale, "shop.tier", { value: summary.finishTier })}</span>
-        <span>${t(locale, "shop.build", { value: summary.buildRating })}</span>
-      </div>
-      ${renderWeaponTools(state, locale)}
-      ${renderMissionProgress(state.save, locale)}
-      <div class="shop-grid">${cards}</div>
-      <button class="primary-button" data-action="next" data-testid="next-run" data-focus-key="next">${nextLabel}</button>
-    </div>
-  `;
-}
-
-function renderShopCard(offer, state, locale) {
-  const cost = getOfferCost(offer, state.save);
-  const disabled = isOfferDisabled(offer, state.save, cost) ? "disabled" : "";
-  const className = offer.locked ? "upgrade-card is-locked" : "upgrade-card";
-  return `
-    <article class="${className}">
-      <h3>${getOfferIcon(offer, locale)} ${getOfferName(offer, locale)}</h3>
-      <p>${getOfferStatus(offer, state.save, locale)}</p>
-      <small>${getOfferDescription(offer, locale)}</small>
-      <button class="buy-button" data-action="buy" data-offer="${offer.offerId ?? `upgrade:${offer.id}`}" data-focus-key="buy:${offer.offerId ?? `upgrade:${offer.id}`}" data-focus-default ${disabled}>
-        ${getOfferButtonLabel(offer, state.save, cost, locale)}
-      </button>
-    </article>
   `;
 }
 
@@ -320,18 +360,18 @@ function getWikiIcon(item) {
   if (item === "boss") return "boss";
   if (item === "enemies") return "enemy";
   if (item === "ammo") return "ammo";
-  if (item === "assistants") return "assistants";
+  if (item === "soldiers" || item === "recruits") return "soldiers";
   if (item === "life") return "life";
   if (item === "materials") return "wallDamage";
   return "info";
 }
 
 function renderStats(state, locale) {
-  const stats = state.run?.stats;
-  if (!stats) return "";
+  const run = state.run;
+  if (!run) return "";
 
-  const statCards = STAT_ORDER.map((id) => renderStatChip(id, getStatValue(stats, id), locale));
-  statCards.push(renderStatChip("weapon", t(locale, findWeapon(stats.weaponId).labelKey), locale));
+  const statCards = STAT_ORDER.map((id) => renderStatChip(id, getDisplayedStatValue(run, id), locale));
+  statCards.push(renderStatChip("weapon", t(locale, findWeapon(run.stats.weaponId).labelKey), locale));
   return statCards.join("");
 }
 
@@ -339,32 +379,59 @@ function renderStatChip(id, value, locale) {
   return `<div class="stat-chip">${icon(id, tStat(locale, id))}<b>${tStat(locale, id)}</b><span>${value}</span></div>`;
 }
 
-function getStatValue(stats, id) {
-  const values = {
-    fireRate: stats.fireRate.toFixed(1),
-    range: Math.round(stats.range),
-    ammo: Math.round(stats.ammo),
-    power: Math.round(stats.power),
-    baseLife: Math.round(stats.baseLife),
-    income: `${Math.round(stats.incomeMultiplier * 100)}%`,
-    doubleWeapon: stats.projectileCount,
-    assistants: stats.assistants,
-    assistantAmmo: Math.round(stats.assistantAmmo),
-    wallDamage: `${Math.round(stats.wallDamageMultiplier * 100)}%`,
-    shieldDamage: `${Math.round(stats.shieldDamageMultiplier * 100)}%`,
-    breachDamage: `${Math.round((stats.wallDamageMultiplier + stats.shieldDamageMultiplier) * 50)}%`,
-  };
-  return values[id] ?? "--";
+function syncMessages(container, run) {
+  const messages = run?.messages ?? [];
+  const existing = new Map([...container.children].map((node) => [node.dataset.messageId, node]));
+  const activeIds = new Set(messages.map((message) => String(message.id)));
+
+  existing.forEach((node, id) => {
+    if (!activeIds.has(id)) node.remove();
+  });
+
+  messages.forEach((message) => {
+    const id = String(message.id);
+    if (existing.has(id)) return;
+    container.append(createMessageNode(message, id));
+  });
 }
 
-function renderMessages(run) {
-  if (!run) return "";
+function createMessageNode(message, id) {
+  const node = document.createElement("div");
+  node.className = `toast ${message.tone}`;
+  node.dataset.messageId = id;
+  node.textContent = message.text;
+  node.style.setProperty("--toast-life", `${Math.max(0.2, message.ttl)}s`);
+  return node;
+}
 
-  return run.messages.map((message) => `<div class="toast ${message.tone}">${message.text}</div>`).join("");
+function renderRunEffects(run, locale) {
+  return getVisibleRunEffects(run).map((effect) => `
+    <div class="effect-bubble ${effect.tone}" data-effect="${effect.id}">
+      <span>${t(locale, `effect.${effect.id}`)}</span>
+      <b>${Math.max(0, Math.ceil(effect.remaining))}s</b>
+    </div>
+  `).join("");
+}
+
+export function renderSpecialShotPrompt(run, locale) {
+  if (!run?.specialShot?.active) return "";
+  return `
+    <h2>${t(locale, "effect.specialShotTitle")}</h2>
+    <p>${t(locale, "effect.specialShotInstruction")}</p>
+  `;
 }
 
 function renderLocaleOptions(locale) {
   return LOCALES.map((item) => `<option value="${item.id}" ${item.id === locale ? "selected" : ""}>${item.label}</option>`).join("");
+}
+
+function getAmmoText(run, locale) {
+  if (!run) return t(locale, "hud.ammo", { value: "--" });
+
+  const value = t(locale, "hud.ammo", { value: Math.ceil(run.player.ammo) });
+  const gain = run.player.ammoGain;
+  if (!gain?.ttl) return value;
+  return `${value} <span class="hud-delta">+${gain.value}</span>`;
 }
 
 function renderProfileOptions(profiles, activeId) {
@@ -375,56 +442,17 @@ function getProfiles(save) {
   return save.profiles?.length ? save.profiles : [{ profileId: save.profileId, profileName: save.profileName }];
 }
 
-function getOfferName(offer, locale) {
-  if (offer.kind === "weapon") return t(locale, offer.labelKey);
-  return tStat(locale, offer.id);
-}
-
-function getOfferDescription(offer, locale) {
-  if (offer.kind === "weapon") return t(locale, offer.descriptionKey);
-  return t(locale, `upgrade.${offer.id}.desc`);
-}
-
-function getOfferStatus(offer, save, locale) {
-  if (isWeaponOwned(offer, save)) return t(locale, "shop.owned");
-  if (isOfferLocked(offer, save)) return t(locale, "shop.unlock", { value: offer.unlockLevel });
-  return t(locale, "shop.level", { value: save.upgrades[offer.id] ?? 0 });
-}
-
-function getOfferButtonLabel(offer, save, cost, locale) {
-  if (isWeaponOwned(offer, save)) return t(locale, "shop.owned");
-  if (isOfferMaxed(offer, save)) return t(locale, "shop.max");
-  if (isOfferLocked(offer, save)) return t(locale, "shop.unlock", { value: offer.unlockLevel });
-  return formatCash(cost);
-}
-
-function getOfferIcon(offer, locale) {
-  if (offer.kind === "weapon") return weaponSprite(offer.id, t(locale, offer.labelKey));
-  return icon(offer.id);
-}
-
-function isOfferDisabled(offer, save, cost) {
-  return isOfferMaxed(offer, save) || isOfferLocked(offer, save) || isWeaponOwned(offer, save) || save.cash < cost;
-}
-
-function isOfferMaxed(offer, save) {
-  return offer.kind !== "weapon" && (save.upgrades[offer.id] ?? 0) >= offer.maxLevel;
-}
-
-function isOfferLocked(offer, save) {
-  return offer.unlockLevel > save.level;
-}
-
-function isWeaponOwned(offer, save) {
-  return offer.kind === "weapon" && (save.weaponsOwned ?? []).includes(offer.id);
-}
-
 function getLocale(state) {
   return normalizeLocale(state.save.settings?.locale);
 }
 
 function getProfileInput(root) {
   return root.querySelector("[data-testid='profile-name']")?.value;
+}
+
+function parseModeValue(value) {
+  const number = Number(value);
+  return value !== "" && Number.isFinite(number) ? number : value;
 }
 
 function getProgressPercent(run) {
@@ -437,16 +465,17 @@ function getLifeText(run, locale) {
   return t(locale, "hud.life", { value: Math.ceil(run.player.life), total: run.player.maxLife });
 }
 
-function formatNumber(value) {
-  return Math.max(0, Math.floor(value)).toLocaleString("en-US");
-}
-
 function activateFocusedAction(root, overlay) {
   const active = root.ownerDocument.activeElement;
-  const control = active?.closest?.("button:not(:disabled), select:not(:disabled)");
+  const control = active?.closest?.("button:not(:disabled), select:not(:disabled), input[type='range']:not(:disabled)");
   const target = control && overlay.contains(control) ? control : getFocusableActions(overlay)[0];
   if (target?.tagName === "SELECT") {
     cycleSelect(target);
+    return;
+  }
+  if (target?.matches("input[type='range']")) {
+    target.value = String((Number(target.value) + 10) % 110);
+    target.dispatchEvent(new target.ownerDocument.defaultView.Event("input", { bubbles: true }));
     return;
   }
   target?.click();
@@ -474,7 +503,7 @@ function focusFirstAction(overlay) {
 }
 
 function getFocusableActions(overlay) {
-  return [...overlay.querySelectorAll("button:not(:disabled), select:not(:disabled)")];
+  return [...overlay.querySelectorAll("button:not(:disabled), select:not(:disabled), input[type='range']:not(:disabled)")];
 }
 
 function cycleSelect(select) {
@@ -487,4 +516,10 @@ function scrollOverlayPanel(overlay, amount) {
   const panel = overlay.querySelector(".panel");
   if (!panel || panel.scrollHeight <= panel.clientHeight) return;
   panel.scrollTop += amount;
+}
+
+function scrollShopOffers(root, direction) {
+  const viewport = root.querySelector("[data-testid='shop-offer-viewport']");
+  if (!viewport || !direction) return;
+  viewport.scrollBy({ left: direction * viewport.clientWidth * 0.82, behavior: "smooth" });
 }

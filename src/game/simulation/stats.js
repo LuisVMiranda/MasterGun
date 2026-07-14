@@ -1,4 +1,6 @@
 import { DEFAULT_WEAPON_ID, findWeapon } from "../content/weapons.js";
+import { findUpgrade } from "../content/upgrades.js";
+import { getOverclockEffectLevel } from "../content/endless.js";
 
 export const BASE_STATS = Object.freeze({
   fireRate: 2.4,
@@ -6,8 +8,8 @@ export const BASE_STATS = Object.freeze({
   ammo: 72,
   power: 6,
   projectileCount: 1,
-  assistants: 0,
-  assistantAmmo: 0,
+  soldiers: 0,
+  soldierTraining: 0,
   baseLife: 0,
   incomeMultiplier: 1,
   wallDamageMultiplier: 1,
@@ -23,8 +25,8 @@ export function buildStats(upgrades, modifiers = {}, weaponId = DEFAULT_WEAPON_I
     ammo: Math.round((BASE_STATS.ammo + upgradeLevel(upgrades, "ammo") * 7) * weapon.ammo),
     power: (BASE_STATS.power + upgradeLevel(upgrades, "power") * 1.7) * weapon.power,
     projectileCount: weapon.projectiles,
-    assistants: upgradeLevel(upgrades, "assistants"),
-    assistantAmmo: getAssistantAmmo(upgrades),
+    soldiers: BASE_STATS.soldiers,
+    soldierTraining: upgradeLevel(upgrades, "assistantAmmo"),
     baseLife: upgradeLevel(upgrades, "baseLife") * 5,
     incomeMultiplier: BASE_STATS.incomeMultiplier + upgradeLevel(upgrades, "income") * 0.12,
     wallDamageMultiplier: getWallDamageMultiplier(upgrades),
@@ -32,18 +34,21 @@ export function buildStats(upgrades, modifiers = {}, weaponId = DEFAULT_WEAPON_I
     weaponId: weapon.id,
   };
 
-  return applyModifiers(stats, modifiers);
+  return applyModifiers({ ...stats, ...getSoldierTrainingStats(stats.soldierTraining) }, modifiers);
 }
 
 export function applyModifiers(stats, modifiers) {
+  const soldierTraining = addWithFloor(stats.soldierTraining, modifiers, "soldierTraining", 0);
+
   return {
     fireRate: addWithFloor(stats.fireRate, modifiers, "fireRate", 0.8),
     range: addWithFloor(stats.range, modifiers, "range", 5),
     ammo: addWithFloor(stats.ammo, modifiers, "ammo", 1),
     power: addWithFloor(stats.power, modifiers, "power", 1),
     projectileCount: Math.max(1, stats.projectileCount + Math.min(1, getModifier(modifiers, "doubleWeapon"))),
-    assistants: addWithFloor(stats.assistants, modifiers, "assistants", 0),
-    assistantAmmo: addWithFloor(stats.assistantAmmo, modifiers, "assistantAmmo", 0),
+    soldiers: addWithFloor(stats.soldiers, modifiers, "soldiers", 0),
+    soldierTraining,
+    ...getSoldierTrainingStats(soldierTraining),
     baseLife: addWithFloor(stats.baseLife, modifiers, "baseLife", 0),
     incomeMultiplier: addWithFloor(stats.incomeMultiplier, modifiers, "income", 0.5),
     wallDamageMultiplier: addWithFloor(stats.wallDamageMultiplier, modifiers, "wallDamage", 1),
@@ -53,12 +58,9 @@ export function applyModifiers(stats, modifiers) {
 }
 
 function upgradeLevel(upgrades, id) {
-  return upgrades[id] ?? 0;
-}
-
-function getAssistantAmmo(upgrades) {
-  if (upgradeLevel(upgrades, "assistants") <= 0) return 0;
-  return 18 + upgradeLevel(upgrades, "assistantAmmo") * 8;
+  const level = upgrades[id] ?? 0;
+  const upgrade = findUpgrade(id);
+  return upgrade ? getOverclockEffectLevel(upgrade, level) : level;
 }
 
 function getWallDamageMultiplier(upgrades) {
@@ -75,4 +77,15 @@ function addWithFloor(base, modifiers, id, floor) {
 
 function getModifier(modifiers, id) {
   return modifiers[id] ?? 0;
+}
+
+function getSoldierTrainingStats(level) {
+  return {
+    soldierDamageMultiplier: 1 + level * 0.035,
+    soldierFireRateMultiplier: 1 + level * 0.02,
+    soldierBossDamageMultiplier: 1 + level * 0.04,
+    soldierWallDamageMultiplier: 1 + level * 0.03,
+    soldierShieldDamageMultiplier: 1 + level * 0.035,
+    soldierFinishDamageMultiplier: 1 + level * 0.035,
+  };
 }

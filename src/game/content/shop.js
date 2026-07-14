@@ -1,27 +1,24 @@
-import { FOURTH_UPGRADE_SLOT_MISSION_ID, THIRD_UPGRADE_SLOT_MISSION_ID } from "./achievements.js";
-import { UPGRADE_DEFINITIONS, getUpgradeCost } from "./upgrades.js";
+import { UPGRADE_DEFINITIONS } from "./upgrades.js";
 import { WEAPON_DEFINITIONS, getWeaponCost } from "./weapons.js";
+import { getUpgradeLevelLimit, getUpgradePurchaseCost } from "../simulation/economy.js";
+
+const MAX_SHOP_SLOTS = 10;
 
 export function getShopOffers(save, seed = save.level) {
   const offers = shuffleOffers([...getUpgradeOffers(save), ...getWeaponOffers(save)], seed);
-  const available = offers.filter((offer) => !offer.locked && !offer.maxed && !offer.owned);
-  const backups = offers.filter((offer) => !available.includes(offer));
-  return [...available, ...backups].slice(0, getShopSlotCount(save));
+  const available = offers.filter(isAvailableOffer);
+  return prioritizeOffers(available, save).slice(0, getShopSlotCount(save));
 }
 
 export function getShopSlotCount(save) {
-  const completed = new Set(save.achievements?.completedIds ?? []);
-  let slots = 2;
-  if (completed.has(THIRD_UPGRADE_SLOT_MISSION_ID)) slots += 1;
-  if (completed.has(FOURTH_UPGRADE_SLOT_MISSION_ID)) slots += 1;
-  return slots;
+  const level = Math.max(0, Number(save.level) || 0);
+  return Math.min(MAX_SHOP_SLOTS, 2 + Math.floor(level / 25));
 }
 
 export function getOfferCost(offer, save) {
   if (offer.kind === "weapon") return getWeaponCost(offer);
 
-  const level = save.upgrades[offer.id] ?? 0;
-  return getUpgradeCost(offer, level);
+  return getUpgradePurchaseCost(save, offer);
 }
 
 function getUpgradeOffers(save) {
@@ -33,7 +30,7 @@ function getUpgradeOffers(save) {
       offerId: `upgrade:${upgrade.id}`,
       level,
       locked: upgrade.unlockLevel > save.level,
-      maxed: level >= upgrade.maxLevel,
+      maxed: level >= getUpgradeLevelLimit(save, upgrade),
     };
   });
 }
@@ -47,6 +44,36 @@ function getWeaponOffers(save) {
     locked: weapon.unlockLevel > save.level,
     owned: owned.has(weapon.id),
   }));
+}
+
+function prioritizeOffers(offers, save) {
+  const selected = [];
+  addOffer(selected, chooseInvestedOffer(offers, save));
+  addOffer(selected, chooseLowDevelopmentOffer(offers, selected, save));
+  const remaining = offers.filter((offer) => !selected.includes(offer));
+  const affordable = remaining.filter((offer) => getOfferCost(offer, save) <= save.cash).sort((a, b) => getOfferCost(b, save) - getOfferCost(a, save));
+  const stretch = remaining.filter((offer) => !affordable.includes(offer)).sort((a, b) => getOfferCost(a, save) - getOfferCost(b, save));
+  return [...selected, ...affordable, ...stretch];
+}
+
+function chooseInvestedOffer(offers, save) {
+  const invested = offers.filter((offer) => offer.kind === "upgrade" && offer.level > 0);
+  return invested.sort((a, b) => b.level - a.level || getOfferCost(a, save) - getOfferCost(b, save))[0];
+}
+
+function chooseLowDevelopmentOffer(offers, selected, save) {
+  const upgrades = offers.filter((offer) => offer.kind === "upgrade" && !selected.includes(offer));
+  const minimumLevel = Math.min(...upgrades.map((offer) => offer.level));
+  const lowest = upgrades.filter((offer) => offer.level === minimumLevel);
+  return lowest.sort((a, b) => getOfferCost(a, save) - getOfferCost(b, save))[0];
+}
+
+function addOffer(offers, offer) {
+  if (offer && !offers.includes(offer)) offers.push(offer);
+}
+
+function isAvailableOffer(offer) {
+  return !offer.locked && !offer.maxed && !offer.owned;
 }
 
 function shuffleOffers(offers, seed) {

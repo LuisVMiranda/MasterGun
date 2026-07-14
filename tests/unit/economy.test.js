@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { FOURTH_UPGRADE_SLOT_MISSION_ID, THIRD_UPGRADE_SLOT_MISSION_ID } from "../../src/game/content/achievements.js";
-import { getShopOffers } from "../../src/game/content/shop.js";
+import { getOfferCost, getShopOffers, getShopSlotCount } from "../../src/game/content/shop.js";
 import { getShopUpgrades } from "../../src/game/content/upgrades.js";
-import { calculateRoundReward, canBuyUpgrade, createDefaultSave, purchaseShopOffer, purchaseUpgrade } from "../../src/game/simulation/economy.js";
+import { calculateRoundReward, canBuyUpgrade, createDefaultSave, getRewardBreakdown, purchaseShopOffer, purchaseUpgrade } from "../../src/game/simulation/economy.js";
 import { createProfile, recordLeaderboard, selectProfile } from "../../src/game/simulation/profiles.js";
 
 describe("economy", () => {
@@ -14,7 +13,15 @@ describe("economy", () => {
       incomeMultiplier: 1.5,
     });
 
-    expect(reward).toBe(407);
+    expect(reward).toBe(327);
+  });
+
+  it("caps combat conversion so dense rounds cannot inflate the economy", () => {
+    const normal = getRewardBreakdown({ baseReward: 200, destroyedValue: 220, finishTier: 3 });
+    const extreme = getRewardBreakdown({ baseReward: 200, destroyedValue: 20000, finishTier: 3 });
+
+    expect(extreme.combat).toBeLessThanOrEqual(168);
+    expect(extreme.subtotal).toBeLessThan(normal.subtotal * 1.25);
   });
 
   it("keeps a small completion payout after heavy score penalties", () => {
@@ -65,7 +72,7 @@ describe("economy", () => {
     save.cash = 10000;
 
     expect(purchaseUpgrade(save, "assistants", 1).purchased).toBe(false);
-    expect(purchaseUpgrade(save, "assistants", 12).purchased).toBe(true);
+    expect(purchaseUpgrade(save, "assistants", 12).purchased).toBe(false);
     expect(purchaseUpgrade(save, "assistantAmmo", 12).purchased).toBe(true);
     expect(purchaseUpgrade(save, "baseLife", 2).purchased).toBe(true);
     expect(purchaseUpgrade(save, "wallDamage", 8).purchased).toBe(true);
@@ -81,6 +88,7 @@ describe("economy", () => {
     expect(choices).toHaveLength(2);
     expect(new Set(ids).size).toBe(2);
     expect(choices.every((upgrade) => !upgrade.locked)).toBe(true);
+    expect(ids).not.toContain("assistants");
     expect(ids).not.toContain("doubleWeapon");
   });
 
@@ -94,13 +102,30 @@ describe("economy", () => {
     expect(offers.some((offer) => offer.kind === "weapon" || offer.kind === "upgrade")).toBe(true);
   });
 
-  it("unlocks third and fourth shop offer slots from hard achievements", () => {
-    const save = createDefaultSave();
-    save.cash = 20000;
-    save.achievements.completedIds = [THIRD_UPGRADE_SLOT_MISSION_ID, FOURTH_UPGRADE_SLOT_MISSION_ID];
+  it("adds one shop slot every 25 levels up to ten", () => {
+    const expected = new Map([[1, 2], [25, 3], [50, 4], [75, 5], [100, 6], [125, 7], [150, 8], [175, 9], [200, 10], [260, 10]]);
 
-    expect(getShopOffers(createDefaultSave(), 7)).toHaveLength(2);
-    expect(getShopOffers(save, 7)).toHaveLength(4);
+    expected.forEach((slots, level) => {
+      const save = createDefaultSave();
+      save.level = level;
+      expect(getShopSlotCount(save)).toBe(slots);
+    });
+  });
+
+  it("balances invested, undeveloped, and affordable offers", () => {
+    const save = createDefaultSave();
+    save.level = 50;
+    save.cash = 500;
+    save.upgrades.fireRate = 5;
+    save.upgrades.range = 2;
+    const offers = getShopOffers(save, 991);
+    const upgrades = offers.filter((offer) => offer.kind === "upgrade");
+    const affordable = offers.filter((offer) => getOfferCost(offer, save) <= save.cash);
+
+    expect(offers).toHaveLength(4);
+    expect(upgrades.some((offer) => offer.level >= 2)).toBe(true);
+    expect(upgrades.some((offer) => offer.level === 0)).toBe(true);
+    expect(affordable.length).toBeGreaterThanOrEqual(2);
   });
 
   it("purchases and equips weapons through shop offers", () => {
@@ -112,6 +137,19 @@ describe("economy", () => {
     expect(result.purchased).toBe(true);
     expect(result.save.weaponsOwned).toContain("machineGun");
     expect(result.save.equippedWeapon).toBe("machineGun");
+  });
+
+  it("unlocks twenty permanent diminishing Overclock levels after Arcade 200", () => {
+    const save = createDefaultSave();
+    save.cash = 100000000;
+    save.level = 200;
+    save.modeProgress.arcade.highestCleared = 200;
+    save.upgrades.fireRate = 30;
+    const result = purchaseUpgrade(save, "fireRate");
+
+    expect(result.purchased).toBe(true);
+    expect(result.save.upgrades.fireRate).toBe(31);
+    expect(canBuyUpgrade({ ...save, modeProgress: { ...save.modeProgress, arcade: { highestCleared: 199 } } }, "fireRate")).toBe(false);
   });
 
   it("creates switchable profiles and records leaderboard scores", () => {

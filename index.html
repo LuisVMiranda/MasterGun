@@ -8,6 +8,9 @@
   </head>
   <body>
     <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
+    <script type="module">
+      const artLab = import.meta.env.DEV && new URLSearchParams(window.location.search).get("artLab") === "1";
+      await import(artLab ? "/src/art-lab/entry.js" : "/src/main.js");
+    </script>
   </body>
 </html>

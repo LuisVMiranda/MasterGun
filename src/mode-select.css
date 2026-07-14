@@ -1,0 +1,28 @@
+.mode-select-panel { max-height: calc(100dvh - 150px); overflow: auto; width: min(1080px, calc(100vw - 40px)); }
+.mode-select-heading { align-items: end; display: flex; justify-content: space-between; margin-bottom: 18px; }
+.mode-select-heading h1 { margin-bottom: 4px; }
+.mode-select-heading h2 { font-size: 1.45rem; }
+.mode-select-heading p { color: #b7c6d9; margin: 2px 0 0; }
+.mode-profile-summary { align-items: center; background: rgba(9, 19, 34, 0.78); border: 1px solid rgba(255, 255, 255, 0.2); display: flex; gap: 8px; padding: 8px 10px; }
+.mode-profile-summary b { color: #ffcb3d; }
+.mode-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mode-card { aspect-ratio: 16 / 7; background: #142338; border: 1px solid rgba(255, 255, 255, 0.28); color: #fff; cursor: pointer; overflow: hidden; padding: 0; position: relative; text-align: left; }
+.mode-card:first-child { aspect-ratio: 16 / 4.5; grid-column: 1 / -1; }
+.mode-card img { height: 100%; inset: 0; object-fit: cover; position: absolute; transition: transform 180ms ease; width: 100%; }
+.mode-card-shade { background: linear-gradient(90deg, rgba(5, 13, 25, 0.9), rgba(5, 13, 25, 0.18)); inset: 0; position: absolute; }
+.mode-card-copy { bottom: 0; display: flex; flex-direction: column; gap: 5px; left: 0; padding: 16px; position: absolute; right: 0; }
+.mode-card-copy strong { font-family: "MasterGun Tungsten Condensed", Impact, sans-serif; font-size: 2rem; font-weight: 500; }
+.mode-card-copy small { max-width: 420px; }
+.mode-card-copy em { color: #ffcb3d; font-style: normal; font-weight: 700; }
+.mode-card.is-locked { cursor: not-allowed; filter: saturate(0.25); opacity: 0.72; }
+.mode-card.is-unlocked:hover img, .mode-card.is-unlocked:focus-visible img { transform: scale(1.025); }
+.mode-lobby-heading { align-items: center; display: flex; justify-content: space-between; }
+@media (max-width: 720px) {
+  .mode-select-panel { max-height: calc(100dvh - 176px); width: calc(100vw - 28px); }
+  .mode-select-heading { align-items: start; flex-direction: column; gap: 8px; }
+  .mode-grid { grid-template-columns: 1fr; }
+  .mode-card, .mode-card:first-child { aspect-ratio: 16 / 7; grid-column: auto; }
+  .mode-card-copy { padding: 11px; }
+  .mode-card-copy strong { font-size: 1.65rem; }
+  .mode-card-copy small { font-size: 0.82rem; }
+}

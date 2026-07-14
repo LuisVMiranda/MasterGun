@@ -1,0 +1,46 @@
+.shop-offer-carousel {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+}
+
+.shop-offer-viewport {
+  min-width: 0;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.shop-offer-viewport::-webkit-scrollbar { display: none; }
+
+.shop-grid.is-carousel {
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  grid-template-columns: none;
+}
+
+.shop-grid.is-carousel .upgrade-card {
+  flex: 0 0 clamp(220px, 27vw, 270px);
+  scroll-snap-align: start;
+}
+
+.shop-scroll-button {
+  align-self: stretch;
+  width: 44px;
+  height: auto;
+  min-height: 172px;
+}
+
+@media (max-width: 560px) {
+  .shop-offer-carousel {
+    grid-template-columns: 36px minmax(0, 1fr) 36px;
+    gap: 6px;
+  }
+
+  .shop-scroll-button { width: 36px; }
+  .shop-grid.is-carousel .upgrade-card { flex-basis: min(250px, calc(100vw - 138px)); }
+}

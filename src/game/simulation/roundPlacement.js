@@ -31,15 +31,16 @@ export function createSpacedSlots(count, startZ, endZ, random, minGap = 0) {
   if (count <= 0) return [];
 
   const available = Math.max(0, endZ - startZ);
-  const slotCount = minGap > 0 ? Math.min(count, Math.max(0, Math.floor(available / minGap) - 1)) : count;
+  const slotCount = minGap > 0 ? Math.min(count, Math.max(1, Math.floor(available / minGap) + 1)) : count;
   if (slotCount <= 0) return [];
 
   const span = Math.max(slotCount, available);
-  const spacing = span / (slotCount + 1);
+  const spacing = slotCount > 1 ? span / (slotCount - 1) : span / 2;
   return Array.from({ length: slotCount }, (_, index) => {
     const safeJitter = minGap > 0 ? Math.max(0, (spacing - minGap) * 0.4) : spacing * 0.16;
     const jitter = randomOffset(random, Math.min(2.2, safeJitter));
-    return Number((startZ + spacing * (index + 1) + jitter).toFixed(2));
+    const base = slotCount > 1 ? startZ + spacing * index : startZ + spacing;
+    return Number(clamp(base + jitter, startZ, endZ).toFixed(2));
   });
 }
 
@@ -64,18 +65,19 @@ export function getGateSequenceCount(profile, endZ) {
   return Math.max(6, Math.round(profile.gateCount * clamp(bossSpan / fullSpan, 0.35, 0.75) * 0.9));
 }
 
-export function getAmmoSupportPickupCount(profile, weaponId) {
-  const weapon = findWeapon(weaponId);
-  const burnSupport = Math.max(0, Math.round((weapon.fireRate - 1.05) * 3));
-  const durationSupport = Math.floor(Math.max(0, profile.targetDuration - 35) / 35);
-  const lateSupport = profile.level >= 60 && weapon.fireRate > 1.1 ? 1 : 0;
-  return Math.min(5, burnSupport + durationSupport + lateSupport);
+export function getAmmoSupportPickupCount(profile, weaponId, stats = null) {
+  const budget = getAmmoBudget(profile, weaponId, stats);
+  if (budget.deficit <= 0) return 0;
+  return Math.min(10, Math.max(1, Math.ceil(budget.deficit / getPreferredPickupValue(profile))));
 }
 
-export function getAmmoSupportValue(profile, weaponId, index) {
-  const weapon = findWeapon(weaponId);
-  const base = 9 + profile.difficulty * 2 + index * 2;
-  return Math.round(base * Math.max(1, weapon.fireRate));
+export function getAmmoSupportValue(profile, weaponId, index, stats = null) {
+  const budget = getAmmoBudget(profile, weaponId, stats);
+  const count = getAmmoSupportPickupCount(profile, weaponId, stats);
+  if (count <= 0) return 0;
+
+  const base = Math.floor(budget.deficit / count);
+  return base + (index < budget.deficit % count ? 1 : 0);
 }
 
 export function randomOffset(random, amount) {
@@ -85,4 +87,16 @@ export function randomOffset(random, amount) {
 function getPressureOffset(random) {
   if (random() > 0.72) return -(1.8 + random() * 1.4);
   return 2.35 + random() * 3.15;
+}
+
+function getAmmoBudget(profile, weaponId, stats = null) {
+  const weapon = findWeapon(weaponId);
+  const fireRate = stats?.fireRate ?? 2.4 * weapon.fireRate;
+  const startingAmmo = stats?.ammo ?? Math.round(72 * weapon.ammo);
+  const required = Math.ceil(fireRate * profile.targetDuration * 1.08);
+  return { deficit: Math.max(0, required - startingAmmo), required, startingAmmo };
+}
+
+function getPreferredPickupValue(profile) {
+  return Math.min(44, Math.round(18 + profile.difficulty * 0.9));
 }

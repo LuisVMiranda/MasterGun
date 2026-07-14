@@ -1,0 +1,3 @@
+# Gate Alternate Modes Through Arcade and Seed Weekly Challenges Locally
+
+Master Gun uses Arcade clears as the single authorization ladder for alternate Modes, then applies mode-specific progression rules: Arcade and Endless use the full persistent build, Weapon Mastery and Boss Rush cap persistent advantages near authored baselines, and Weekly Challenge uses a curated baseline for profile-independent balance. Weekly content is deterministically seeded from the UTC week and stores a monotonic last-seen timestamp plus a shared three-Attempt budget in the local save; this keeps the game backend-free and repeatable, with the accepted limitation that local clock and storage protections cannot provide server-grade anti-tamper guarantees.

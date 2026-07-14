@@ -5,6 +5,10 @@ import { applyRoundReward, calculateRoundReward, purchaseShopOffer } from "./eco
 import { getLifeRatio } from "./life.js";
 import { recordLeaderboard } from "./profiles.js";
 import { calculateLiveScore } from "./scoring.js";
+import { getRunHighlights } from "./runHighlights.js";
+import { GAME_MODE } from "../content/modes.js";
+import { recordArcadeClear } from "./modeProgress.js";
+import { continueAlternateVictory, continueEndlessOperation, extractEndlessOperation, settleAlternateFailure, settleAlternateSuccess } from "./modeSettlement.js";
 
 export function completeRun(state) {
   const run = state.run;
@@ -18,48 +22,71 @@ export function completeRun(state) {
   });
 
   run.score = calculateLiveScore(run);
-  const rewardedSave = applyRoundReward(state.save, reward, run.finishTier);
+  clearTemporarySupport(run);
+  if (run.mode !== GAME_MODE.ARCADE) return completeAlternateRun(state, createSummary(run, reward));
+  const progressedSave = run.mode === GAME_MODE.ARCADE ? recordArcadeClear(state.save, run.level) : state.save;
+  const rewardedSave = applyRoundReward(progressedSave, reward, run.finishTier);
   const scoredSave = recordLeaderboard(rewardedSave, { level: run.level, score: run.score, finishTier: run.finishTier });
   const save = recordRunMissions(scoredSave, run);
 
   return {
     ...state,
-    phase: PHASE.SHOP,
+    phase: PHASE.VICTORY,
     save,
     lastSummary: {
-      level: run.level,
-      reward,
-      finishTier: run.finishTier,
-      destroyedValue: run.destroyedValue,
-      scorePenalty: run.scorePenalty,
-      score: run.score,
-      lifeRatio: getLifeRatio(run),
-      buildRating: run.buildRating ?? 0,
+      ...createSummary(run, reward),
       shopOffers: getShopOffers(save, run.seed ^ Math.round(reward * 31)),
     },
   };
 }
 
+export function continueRunVictory(state) {
+  if (state.phase !== PHASE.VICTORY) return state;
+  if (state.run?.mode !== GAME_MODE.ARCADE) return continueAlternateVictory(state);
+  return { ...state, phase: PHASE.SHOP };
+}
+
 export function failRun(state) {
   const run = state.run;
   run.score = calculateLiveScore(run);
+  clearTemporarySupport(run);
+  const summary = { ...createSummary(run, 0), failed: true, lifeRatio: 0 };
+  if (run.mode !== GAME_MODE.ARCADE) return settleAlternateFailure(state, summary);
 
   return {
     ...state,
     phase: PHASE.SHOP,
     lastSummary: {
-      level: run.level,
-      failed: true,
-      reward: 0,
-      finishTier: run.finishTier,
-      destroyedValue: run.destroyedValue,
-      scorePenalty: run.scorePenalty,
-      score: run.score,
-      lifeRatio: 0,
-      buildRating: run.buildRating ?? 0,
+      ...summary,
       shopOffers: getShopOffers(state.save, run.seed ^ 0x51f3),
     },
   };
+}
+
+export { continueEndlessOperation, extractEndlessOperation };
+
+function completeAlternateRun(state, summary) {
+  const result = settleAlternateSuccess(state, summary);
+  return { ...state, phase: result.phase, save: result.save, lastSummary: result.summary };
+}
+
+function createSummary(run, reward) {
+  return {
+    mode: run.mode,
+    level: run.level,
+    reward,
+    finishTier: run.finishTier,
+    destroyedValue: run.destroyedValue,
+    scorePenalty: run.scorePenalty,
+    score: run.score,
+    lifeRatio: getLifeRatio(run),
+    buildRating: run.buildRating ?? 0,
+    highlights: getRunHighlights(run),
+  };
+}
+
+function clearTemporarySupport(run) {
+  run.soldiers = [];
 }
 
 export function buyOffer(state, offerId) {

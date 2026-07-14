@@ -20,7 +20,7 @@ describe("achievements", () => {
     expect(markGameWonSeen(progressed).achievements.gameWonSeen).toBe(true);
   });
 
-  it("unlocks extra shop slots through late level achievements", () => {
+  it("tracks expanded-armory milestones independently of shop slots", () => {
     const save = createDefaultSave();
     save.level = 80;
     const thirdSlot = refreshMissionProgress(save);

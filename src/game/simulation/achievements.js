@@ -1,4 +1,5 @@
 import { ENTITY } from "../content/constants.js";
+import { markVictorySeen, syncModeVictories } from "./victoryProgress.js";
 import { MASTER_MISSION_ID, MISSION_DEFINITIONS } from "../content/achievements.js";
 
 export function createMissionStats() {
@@ -21,7 +22,7 @@ export function createMissionStats() {
     ammoEarned: 0,
     bossKills: 0,
     bossNoProjectileRuns: 0,
-    assistantUnlocked: 0,
+    soldierUnlocked: 0,
     doubleUnlocked: 0,
     greenBuffs: 0,
     redGatesDestroyed: 0,
@@ -34,6 +35,9 @@ export function createMissionStats() {
     shieldKills: 0,
     bruteKills: 0,
     finishCashDrops: 0,
+    targetsDestroyed: 0,
+    shotsFired: 0,
+    cashValue: 0,
     completedMissions: 0,
   };
 }
@@ -63,6 +67,9 @@ export function createRunMetrics(weaponId) {
     shieldKills: 0,
     bruteKills: 0,
     finishCashDrops: 0,
+    targetsDestroyed: 0,
+    shotsFired: 0,
+    cashValue: 0,
   };
 }
 
@@ -98,14 +105,12 @@ export function recordWeaponEquip(save, weaponId) {
 }
 
 export function markGameWonSeen(save) {
-  return {
-    ...save,
-    achievements: { ...normalizeAchievements(save.achievements), gameWonSeen: true },
-  };
+  return markVictorySeen(save, "arcadeChampion");
 }
 
 export function recordDestroyedTarget(run, entity) {
   if (!run.metrics) return;
+  run.metrics.targetsDestroyed += 1;
 
   if (entity.type === ENTITY.GATE) recordGateDestroyed(run, entity);
   if (entity.type === ENTITY.SOLID_WALL) run.metrics.wallsDestroyed += 1;
@@ -120,6 +125,7 @@ export function recordDamage(run, damage) {
 export function recordCashCollected(run, entity) {
   if (!run.metrics) return;
   run.metrics.cashDrops += 1;
+  run.metrics.cashValue += Math.max(0, entity.value ?? 0);
   if (entity.sourceType === "finish") run.metrics.finishCashDrops += 1;
 }
 
@@ -163,7 +169,7 @@ export function getMissionSummary(save) {
 function applyMissionProgress(save, increments = {}, sets = {}) {
   const stats = refreshDerivedStats(save, mergeStats(save.missionStats, increments, sets));
   const achievements = completeAvailableMissions(save.achievements, stats);
-  return { ...save, missionStats: stats, achievements };
+  return syncModeVictories({ ...save, missionStats: stats, achievements });
 }
 
 function mergeStats(current, increments, sets) {
@@ -183,7 +189,7 @@ function refreshDerivedStats(save, stats) {
   stats.cashHeld = Math.max(stats.cashHeld, save.cash ?? 0);
   stats.levelReached = Math.max(stats.levelReached, save.level ?? 1);
   stats.upgradesBought = Math.max(stats.upgradesBought, upgradeTotal);
-  stats.assistantUnlocked = Math.max(stats.assistantUnlocked, Number((save.upgrades?.assistants ?? 0) > 0));
+  stats.soldierUnlocked = Math.max(stats.soldierUnlocked, Number((save.upgrades?.assistants ?? 0) > 0));
   return stats;
 }
 
