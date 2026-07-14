@@ -38,6 +38,14 @@ export function createMissionStats() {
     targetsDestroyed: 0,
     shotsFired: 0,
     cashValue: 0,
+    masteryMedals: 0,
+    masteryGoldMedals: 0,
+    bossRushWins: 0,
+    bossRushGoldMedals: 0,
+    weeklyCompletions: 0,
+    endlessBestSector: 0,
+    endlessExtractions: 0,
+    largestExtraction: 0,
     completedMissions: 0,
   };
 }
@@ -97,6 +105,10 @@ export function recordRunMissions(save, run) {
 
 export function refreshMissionProgress(save) {
   return applyMissionProgress(save);
+}
+
+export function recordWeeklyCompletion(save) {
+  return applyMissionProgress(save, { weeklyCompletions: 1 });
 }
 
 export function recordWeaponEquip(save, weaponId) {
@@ -190,7 +202,34 @@ function refreshDerivedStats(save, stats) {
   stats.levelReached = Math.max(stats.levelReached, save.level ?? 1);
   stats.upgradesBought = Math.max(stats.upgradesBought, upgradeTotal);
   stats.soldierUnlocked = Math.max(stats.soldierUnlocked, Number((save.upgrades?.assistants ?? 0) > 0));
+  applyModeStats(stats, save.modeProgress);
   return stats;
+}
+
+function applyModeStats(stats, modeProgress = {}) {
+  applyMasteryStats(stats, Object.values(modeProgress.mastery ?? {}));
+  applyBossRushStats(stats, Object.values(modeProgress.bossRush?.medals ?? {}));
+  applyEndlessStats(stats, modeProgress.endless ?? {});
+}
+
+function applyMasteryStats(stats, mastery) {
+  stats.masteryMedals = Math.max(stats.masteryMedals, countMedals(mastery, 1));
+  stats.masteryGoldMedals = Math.max(stats.masteryGoldMedals, countMedals(mastery, 3));
+}
+
+function applyBossRushStats(stats, bossMedals) {
+  stats.bossRushWins = Math.max(stats.bossRushWins, bossMedals.filter((medal) => medal >= 1).length);
+  stats.bossRushGoldMedals = Math.max(stats.bossRushGoldMedals, bossMedals.filter((medal) => medal >= 3).length);
+}
+
+function applyEndlessStats(stats, endless) {
+  stats.endlessBestSector = Math.max(stats.endlessBestSector, endless.bestSector ?? 0);
+  stats.endlessExtractions = Math.max(stats.endlessExtractions, endless.extractions ?? 0);
+  stats.largestExtraction = Math.max(stats.largestExtraction, endless.largestExtraction ?? 0);
+}
+
+function countMedals(campaigns, minimum) {
+  return campaigns.reduce((total, campaign) => total + Object.values(campaign.medals ?? {}).filter((medal) => medal >= minimum).length, 0);
 }
 
 function completeAvailableMissions(current, stats) {

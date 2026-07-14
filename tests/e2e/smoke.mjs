@@ -328,6 +328,13 @@ async function finishRun(page) {
   await pressGamepad(page, 13);
   await assertControllerFocusHighlight(page, "continueVictory");
   await pressGamepad(page, 0);
+  await page.waitForSelector("[data-testid='achievement-victory']", { timeout: 2000 });
+  if (await page.locator(".achievement-unlock-list article").count() < 1) throw new Error("Achievement celebration did not list the unlocked mission.");
+  const rainbow = await page.getByTestId("achievement-victory").evaluate((element) => window.getComputedStyle(element, "::before").backgroundImage);
+  if (!rainbow.includes("linear-gradient")) throw new Error(`Achievement celebration lost its rainbow bar: ${rainbow}`);
+  await assertControllerFocusHighlight(page, "continueVictory");
+  await page.screenshot({ path: join(screenshotDir, "achievement.png") });
+  await pressGamepad(page, 0);
   await page.waitForSelector("[data-testid='shop-panel']", { timeout: 62000 });
   await page.screenshot({ path: join(screenshotDir, "shop.png") });
 }

@@ -4,6 +4,7 @@ import { getEndlessLoot } from "../content/endless.js";
 import { evaluateMasteryMedal, getMasteryReward } from "../content/masteryTrials.js";
 import { GAME_MODE } from "../content/modes.js";
 import { isWeeklyObjectiveComplete } from "../content/weeklyChallenge.js";
+import { recordWeeklyCompletion, refreshMissionProgress } from "./achievements.js";
 import { normalizeModeProgress } from "./modeProgress.js";
 import { syncModeVictories } from "./victoryProgress.js";
 
@@ -53,7 +54,16 @@ export function extractEndlessOperation(state) {
     extractions: progress.endless.extractions + 1,
     largestExtraction: Math.max(progress.endless.largestExtraction, amount),
   };
-  return { ...state, phase: PHASE.MODE_MENU, run: null, save: { ...withProgress(state.save, progress, { endless }), cash: state.save.cash + amount }, lastSummary: { ...state.lastSummary, extracted: amount } };
+  const save = refreshMissionProgress({ ...withProgress(state.save, progress, { endless }), cash: state.save.cash + amount });
+  const newAchievementIds = getNewAchievementIds(state.save, save);
+  const achievementPromptActive = newAchievementIds.length > 0;
+  return {
+    ...state,
+    phase: achievementPromptActive ? PHASE.VICTORY : PHASE.MODE_MENU,
+    run: null,
+    save,
+    lastSummary: { ...state.lastSummary, checkpoint: false, extracted: amount, newAchievementIds, achievementPromptActive },
+  };
 }
 
 function settleMastery(state, summary) {
@@ -99,7 +109,7 @@ function settleWeekly(state, summary) {
   const challenge = state.run.modeContext.challenge;
   const progress = normalizeModeProgress(state.save.modeProgress, state.save.level);
   const weekly = { ...progress.weekly, completed: true, rewardClaimed: true, activeAttempt: null };
-  const save = { ...withProgress(state.save, progress, { weekly }), cash: state.save.cash + challenge.reward };
+  const save = recordWeeklyCompletion({ ...withProgress(state.save, progress, { weekly }), cash: state.save.cash + challenge.reward });
   return { save, phase: PHASE.VICTORY, summary: { ...summary, reward: challenge.reward, modeLabel: challenge.id } };
 }
 
@@ -135,4 +145,9 @@ function getNextSelection(state) {
     return { ...state.modeSelection, bossFight: Math.min(25, (state.run.modeContext.fight.number ?? 1) + 1) };
   }
   return state.modeSelection;
+}
+
+function getNewAchievementIds(previousSave, nextSave) {
+  const previous = new Set(previousSave.achievements?.completedIds ?? []);
+  return (nextSave.achievements?.completedIds ?? []).filter((id) => !previous.has(id));
 }

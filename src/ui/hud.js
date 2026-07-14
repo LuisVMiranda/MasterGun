@@ -279,15 +279,17 @@ function renderModeLobby(state) {
   return renderAlternateModeLobby(state, locale);
 }
 
-function renderArcadeLobby(state) {
+export function renderArcadeLobby(state) {
   const locale = getLocale(state);
   const unlock = getNextUnlock(state.save.level, locale);
   return `
     <div class="panel menu-panel">
-      <div class="mode-lobby-heading">
-        <h1>${t(locale, "mode.arcade.title")}</h1>
-        <button class="secondary-button" data-action="modeBack" data-focus-key="modeBack">${t(locale, "action.backModes")}</button>
-      </div>
+      <nav class="menu-navigation" aria-label="${t(locale, "action.backModes")}">
+        <button class="secondary-button menu-back-button" data-action="modeBack" data-focus-key="modeBack">
+          ${icon("arrowLeft")}<span>${t(locale, "action.backModes")}</span>
+        </button>
+      </nav>
+      <header class="arcade-menu-heading"><h1>${t(locale, "mode.arcade.title")}</h1></header>
       <div class="menu-stats">
         <span>${formatCash(state.save.cash)}</span>
         <span>${t(locale, "menu.bestTier", { value: state.save.bestFinishTier })}</span>

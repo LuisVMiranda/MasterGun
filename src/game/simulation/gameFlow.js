@@ -28,13 +28,14 @@ export function completeRun(state) {
   const rewardedSave = applyRoundReward(progressedSave, reward, run.finishTier);
   const scoredSave = recordLeaderboard(rewardedSave, { level: run.level, score: run.score, finishTier: run.finishTier });
   const save = recordRunMissions(scoredSave, run);
+  const summary = withNewAchievements(createSummary(run, reward), state.save, save);
 
   return {
     ...state,
     phase: PHASE.VICTORY,
     save,
     lastSummary: {
-      ...createSummary(run, reward),
+      ...summary,
       shopOffers: getShopOffers(save, run.seed ^ Math.round(reward * 31)),
     },
   };
@@ -42,6 +43,9 @@ export function completeRun(state) {
 
 export function continueRunVictory(state) {
   if (state.phase !== PHASE.VICTORY) return state;
+  if (hasPendingAchievementPrompt(state.lastSummary)) {
+    return { ...state, lastSummary: { ...state.lastSummary, achievementPromptActive: true } };
+  }
   if (state.run?.mode !== GAME_MODE.ARCADE) return continueAlternateVictory(state);
   return { ...state, phase: PHASE.SHOP };
 }
@@ -67,7 +71,19 @@ export { continueEndlessOperation, extractEndlessOperation };
 
 function completeAlternateRun(state, summary) {
   const result = settleAlternateSuccess(state, summary);
-  return { ...state, phase: result.phase, save: result.save, lastSummary: result.summary };
+  const save = result.phase === PHASE.VICTORY ? recordRunMissions(result.save, state.run) : result.save;
+  const nextSummary = withNewAchievements(result.summary, state.save, save);
+  return { ...state, phase: result.phase, save, lastSummary: nextSummary };
+}
+
+function withNewAchievements(summary, previousSave, nextSave) {
+  const previous = new Set(previousSave.achievements?.completedIds ?? []);
+  const completed = nextSave.achievements?.completedIds ?? [];
+  return { ...summary, newAchievementIds: completed.filter((id) => !previous.has(id)) };
+}
+
+function hasPendingAchievementPrompt(summary) {
+  return !summary?.achievementPromptActive && (summary?.newAchievementIds?.length ?? 0) > 0;
 }
 
 function createSummary(run, reward) {

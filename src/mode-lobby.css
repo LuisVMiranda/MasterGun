@@ -1,4 +1,8 @@
+.menu-navigation { display: flex; width: 100%; justify-content: flex-start; }
+.menu-back-button { align-items: center; display: inline-flex; gap: 7px; min-height: 40px; padding: 8px 12px; }
+.arcade-menu-heading { text-align: center; width: 100%; }
 .mode-content-panel { max-height: calc(100dvh - 150px); overflow: auto; width: min(1120px, calc(100vw - 40px)); }
+.mode-content-panel > .mode-menu-navigation { margin-bottom: 10px; }
 .mode-content-panel > .mode-lobby-heading { border-bottom: 1px solid rgba(255,255,255,.16); margin-bottom: 16px; padding-bottom: 12px; }
 .mode-content-panel .mode-lobby-heading p { color: #b8c6d9; margin: 2px 0 0; }
 .mode-tab-row, .difficulty-tabs { display: flex; gap: 8px; margin-bottom: 14px; }

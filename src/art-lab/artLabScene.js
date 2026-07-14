@@ -265,6 +265,7 @@ function createPrototypeStructure(kind, state) {
 
 function createProductionOperator(faction, unitKind) {
   if (faction === "soldier") return createSoldierObject();
+  if (unitKind === "boss") return createEntityObject(mockEntity(ENTITY.BOSS, faction));
   if (BOSS_FAMILIES.has(unitKind)) return createEntityObject({ ...mockEntity(ENTITY.BOSS, faction), bossFamily: unitKind });
   if (unitKind === "shooter") return createEntityObject(mockEntity(ENTITY.SHOOTER, faction));
   return createEntityObject({ ...mockEntity(ENTITY.ENEMY, faction), enemyKind: unitKind });
@@ -335,7 +336,7 @@ function frameCamera(camera, controls, state) {
 
 function getInspectionFrame(state) {
   if (state.variant !== "showcase" || state.asset === "all") return null;
-  if (state.asset === "operator" && BOSS_FAMILIES.has(state.unitKind)) return { camera: [5.3, 4.4, -8.2], target: [0, 1.7, 0] };
+  if (state.asset === "operator" && (state.unitKind === "boss" || BOSS_FAMILIES.has(state.unitKind))) return { camera: [5.3, 4.4, -8.2], target: [0, 1.7, 0] };
   if (state.asset === "operator") return { camera: [3.1, 2.45, -4.5], target: [0, 0.92, 0] };
   if (APPROVED_WEAPON_IDS.includes(state.asset)) return { camera: [3.5, 2.35, -4.1], target: [0, 0.42, 0.35] };
   return { camera: [3.8, 2.8, -5.4], target: [0, 1, 0] };

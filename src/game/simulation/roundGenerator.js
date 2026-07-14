@@ -5,7 +5,7 @@ import { DEFAULT_WEAPON_ID, getPickupWeapon } from "../content/weapons.js";
 import { choose, clamp } from "./math.js";
 import { rebalanceChallengeRunway } from "./challengeSpacing.js";
 import { rebalanceRoundLayout } from "./roundBalance.js";
-import { POWERUP_MIN_GAP, START_Z, chooseTargetX, createPathSlots, createSegmentSlots, createSpacedSlots, getAmmoSupportPickupCount, getAmmoSupportValue, getGameplayEnd, getGateSequenceCount, getReadablePressureOffset, randomOffset } from "./roundPlacement.js";
+import { FINISH_ROW_GAP, POWERUP_MIN_GAP, START_Z, chooseTargetX, createPathSlots, createSegmentSlots, createSpacedSlots, getAmmoSupportPickupCount, getAmmoSupportValue, getFinishRowStart, getGameplayEnd, getGateSequenceCount, getReadablePressureOffset, randomOffset } from "./roundPlacement.js";
 import { getLevelProfile } from "./progression.js";
 import { createSeededRandom } from "./random.js";
 import { addRecruitEvents } from "./roundRecruitment.js";
@@ -303,13 +303,13 @@ function isFloorPowerup(entity) {
 }
 
 function addFinishLadder(entities, cursor, profile) {
-  const startZ = Math.max(cursor.z + 4, profile.trackLength - 24);
+  const startZ = Math.max(cursor.z + 4, getFinishRowStart(profile));
 
   for (let row = 0; row < profile.finishRows; row += 1) {
     const health = Math.round(20 + row * 13 * profile.difficulty);
     const value = Math.round(24 + row * 18 * profile.difficulty);
-    entities.push(createFinishBlock(cursor, -1.25, startZ + row * 2.2, health, value));
-    entities.push(createFinishBlock(cursor, 1.25, startZ + row * 2.2, health, value));
+    entities.push(createFinishBlock(cursor, -1.25, startZ + row * FINISH_ROW_GAP, health, value));
+    entities.push(createFinishBlock(cursor, 1.25, startZ + row * FINISH_ROW_GAP, health, value));
   }
 }
 

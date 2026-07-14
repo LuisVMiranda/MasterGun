@@ -107,8 +107,11 @@ function renderEndlessLobby(state, locale) {
 }
 
 function renderLobbyShell(state, locale, content, className) {
-  return `<div class="panel mode-content-panel ${className}" data-testid="mode-lobby"><header class="mode-lobby-heading"><div><h1>${t(locale, `mode.${state.selectedMode}.title`)}</h1><p>${t(locale, `mode.${state.selectedMode}.description`)}</p></div>
-    <button class="secondary-button" data-action="modeBack" data-focus-key="modeBack">${t(locale, "action.backModes")}</button></header>${content}</div>`;
+  return `<div class="panel mode-content-panel ${className}" data-testid="mode-lobby">
+    <nav class="menu-navigation mode-menu-navigation" aria-label="${t(locale, "action.backModes")}">
+      <button class="secondary-button menu-back-button" data-action="modeBack" data-focus-key="modeBack">${icon("arrowLeft")}<span>${t(locale, "action.backModes")}</span></button>
+    </nav>
+    <header class="mode-lobby-heading"><div><h1>${t(locale, `mode.${state.selectedMode}.title`)}</h1><p>${t(locale, `mode.${state.selectedMode}.description`)}</p></div></header>${content}</div>`;
 }
 
 function renderMasteryWeapon(state, weapon, locale) {

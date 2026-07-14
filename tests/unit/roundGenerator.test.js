@@ -5,6 +5,7 @@ import { createRoundPlan } from "../../src/game/simulation/roundGenerator.js";
 import { getLevelProfile } from "../../src/game/simulation/progression.js";
 import { buildStats } from "../../src/game/simulation/stats.js";
 import { getWallUnitGap, WALL_UNIT_CLEARANCE } from "../../src/game/simulation/roundOcclusion.js";
+import { FINISH_ROW_GAP, getFinishExitDistance, getFinishRowStart, getGameplayEnd } from "../../src/game/simulation/roundPlacement.js";
 
 describe("createRoundPlan", () => {
   it("creates repeatable rounds from the same seed", () => {
@@ -24,6 +25,22 @@ describe("createRoundPlan", () => {
     expect(gateTypes).toContain("debuff");
     expect(plan.entities.some((entity) => entity.type === ENTITY.BARRICADE)).toBe(true);
     expect(finishBlocks.length).toBeGreaterThan(8);
+  });
+
+  it("reserves a complete pre-finish harvesting zone for every money row", () => {
+    [1, 16, 79, 199].forEach((level) => {
+      const plan = createRoundPlan(level, 6000 + level);
+      const finish = plan.entities.filter((entity) => entity.type === ENTITY.FINISH_BLOCK);
+      const rows = [...new Set(finish.map((entity) => entity.z))].sort((a, b) => a - b);
+
+      expect(rows).toHaveLength(plan.profile.finishRows);
+      expect(rows[0]).toBeCloseTo(getFinishRowStart(plan.profile));
+      expect(rows.at(-1)).toBeLessThanOrEqual(plan.profile.trackLength - getFinishExitDistance(plan.profile));
+      expect(getFinishExitDistance(plan.profile) / plan.profile.speed).toBeCloseTo(2.5);
+      expect(rows[0] - getGameplayEnd(plan.profile)).toBeGreaterThanOrEqual(11.9);
+      rows.slice(1).forEach((z, index) => expect(z - rows[index]).toBeCloseTo(FINISH_ROW_GAP));
+      rows.forEach((z) => expect(finish.filter((entity) => entity.z === z)).toHaveLength(2));
+    });
   });
 
   it("projects 200 levels with growing pressure and capped duration", () => {

@@ -10,7 +10,7 @@ const VARIANTS = Object.freeze([
 const ASSET_IDS = Object.freeze(["all", "pistol", "shotgun", "machineGun", "rifle", "operator", "gate", "wall", "pickup"]);
 const ANIMATION_IDS = Object.freeze(["idle", "aim", "forward", "backward", "left", "right", "fire", "reload"]);
 const PICKUP_IDS = Object.freeze(["cash", "ammo", "power", "debuff"]);
-const UNIT_IDS = Object.freeze(["runner", "sprinter", "shield", "brute", "shooter", "ironWarden", "arcDuelist", "triCannon", "skyTempest", "reclaimer"]);
+const UNIT_IDS = Object.freeze(["runner", "sprinter", "shield", "brute", "shooter", "boss", "ironWarden", "arcDuelist", "triCannon", "skyTempest", "reclaimer"]);
 
 const root = document.querySelector("#app");
 const state = readState();

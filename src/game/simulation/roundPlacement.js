@@ -4,8 +4,11 @@ import { choose, clamp } from "./math.js";
 
 export const START_Z = 12;
 export const POWERUP_MIN_GAP = 8;
+export const FINISH_ROW_GAP = 2.6;
 
-const FINISH_BUFFER = 18;
+const FINISH_APPROACH_GAP = 12;
+const FINISH_EXIT_SECONDS = 2.5;
+const MIN_FINISH_EXIT_DISTANCE = 20;
 const TARGET_MARGIN = 0.78;
 
 export function createPathSlots(profile, random, endZ = getGameplayEnd(profile), count = profile.gateCount) {
@@ -45,7 +48,19 @@ export function createSpacedSlots(count, startZ, endZ, random, minGap = 0) {
 }
 
 export function getGameplayEnd(profile) {
-  return Math.max(START_Z + 44, profile.trackLength - (profile.finishRows * 2.2 + FINISH_BUFFER));
+  return Math.max(START_Z + 44, getFinishRowStart(profile) - FINISH_APPROACH_GAP);
+}
+
+export function getFinishRowStart(profile) {
+  return getFinishRowEnd(profile) - Math.max(0, profile.finishRows - 1) * FINISH_ROW_GAP;
+}
+
+export function getFinishRowEnd(profile) {
+  return profile.trackLength - getFinishExitDistance(profile);
+}
+
+export function getFinishExitDistance(profile) {
+  return Math.max(MIN_FINISH_EXIT_DISTANCE, profile.speed * FINISH_EXIT_SECONDS);
 }
 
 export function chooseTargetX(random) {

@@ -64,7 +64,7 @@ describe("alternate mode runs", () => {
     expect(state.save.level).toBe(200);
     expect(state.save.cash).toBeGreaterThan(before);
     expect(state.save.modeProgress.mastery.pistol.medals[1]).toBe(3);
-    expect(continueRunVictory(state).phase).toBe("modeMenu");
+    expect(continuePastAchievements(state).phase).toBe("modeMenu");
   });
 
   it("pays a weekly reward only when every preview objective is met", () => {
@@ -98,13 +98,18 @@ describe("alternate mode runs", () => {
 
     expect(state.save.cash).toBe(wallet);
     expect(state.lastSummary.checkpoint).toBe(true);
-    state = continueRunVictory(state);
+    state = continuePastAchievements(state);
     expect(state.phase).toBe("endlessCheckpoint");
     state = extractEndlessOperation(state);
     expect(state.save.cash).toBeGreaterThan(wallet + 700);
     expect(state.save.modeProgress.endless.activeOperation).toBeNull();
   });
 });
+
+function continuePastAchievements(state) {
+  const next = continueRunVictory(state);
+  return next.lastSummary?.achievementPromptActive ? continueRunVictory(next) : next;
+}
 
 function createUnlockedState(mode) {
   const save = createDefaultSave();

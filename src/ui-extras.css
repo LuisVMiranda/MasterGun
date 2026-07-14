@@ -398,6 +398,52 @@ h2 {
   animation: victory-title-in 620ms 120ms ease-out both;
 }
 
+.achievement-victory-panel {
+  position: relative;
+  gap: 14px;
+  overflow: hidden;
+}
+
+.achievement-victory-panel::before {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 5px;
+  content: "";
+  background: linear-gradient(90deg, #29a8ff, #24e86b, #ffcb3d, #ff3451, #875cff);
+}
+
+.achievement-unlock-list {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: min(620px, 100%);
+  max-height: min(36dvh, 260px);
+  gap: 8px;
+  overflow: auto;
+}
+
+.achievement-unlock-list article {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  text-align: left;
+}
+
+.achievement-unlock-list strong,
+.achievement-unlock-list small {
+  display: block;
+}
+
+.achievement-unlock-list strong { color: var(--gold); }
+.achievement-unlock-list small { margin-top: 2px; color: var(--muted); }
+
 .victory-kicker {
   align-self: end;
   color: var(--ink);

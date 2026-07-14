@@ -70,15 +70,38 @@ const CORE_MISSION_ROWS = Object.freeze([
   row("fullArsenal", "weaponsOwned", 4, ["Full Arsenal", "Own every weapon."], ["Arsenal completo", "Tenha todas as armas."], ["Arsenal completo", "Posee todas las armas."]),
 ]);
 
+const MODE_MISSION_ROWS = Object.freeze([
+  row("masteryInitiate", "masteryMedals", 1, ["Mastery Initiate", "Earn your first Weapon Mastery medal."], ["Início da maestria", "Conquiste sua primeira medalha de Maestria de Arma."], ["Inicio de dominio", "Consigue tu primera medalla de Dominio de Arma."]),
+  row("masteryTour", "masteryMedals", 20, ["Mastery Tour", "Earn 20 Weapon Mastery medals."], ["Turnê da maestria", "Conquiste 20 medalhas de Maestria de Arma."], ["Gira de dominio", "Consigue 20 medallas de Dominio de Arma."]),
+  row("masteryGraduate", "masteryMedals", 80, ["Mastery Graduate", "Earn a medal in every Weapon Mastery trial."], ["Graduado em maestria", "Conquiste uma medalha em todas as provas de Maestria de Arma."], ["Graduado en dominio", "Consigue una medalla en todas las pruebas de Dominio de Arma."]),
+  row("goldStandard", "masteryGoldMedals", 10, ["Gold Standard", "Earn 10 gold Weapon Mastery medals."], ["Padrão ouro", "Conquiste 10 medalhas de ouro na Maestria de Arma."], ["Estándar de oro", "Consigue 10 medallas de oro en Dominio de Arma."]),
+  row("gildedArmory", "masteryGoldMedals", 40, ["Gilded Armory", "Earn 40 gold Weapon Mastery medals."], ["Arsenal dourado", "Conquiste 40 medalhas de ouro na Maestria de Arma."], ["Arsenal dorado", "Consigue 40 medallas de oro en Dominio de Arma."]),
+  row("flawlessArsenal", "masteryGoldMedals", 80, ["Flawless Arsenal", "Earn gold in every Weapon Mastery trial."], ["Arsenal impecável", "Conquiste ouro em todas as provas de Maestria de Arma."], ["Arsenal impecable", "Consigue oro en todas las pruebas de Dominio de Arma."]),
+  row("rushDebut", "bossRushWins", 1, ["Rush Debut", "Win your first Boss Rush fight."], ["Estreia no Boss Rush", "Vença sua primeira luta no Boss Rush."], ["Debut en Boss Rush", "Gana tu primer combate de Boss Rush."]),
+  row("commandHunter", "bossRushWins", 10, ["Command Hunter", "Defeat 10 Boss Rush commanders."], ["Caçador de comandantes", "Derrote 10 comandantes do Boss Rush."], ["Cazador de comandantes", "Derrota a 10 comandantes de Boss Rush."]),
+  row("bossRushConqueror", "bossRushWins", 25, ["Boss Rush Conqueror", "Defeat every Boss Rush commander."], ["Conquistador do Boss Rush", "Derrote todos os comandantes do Boss Rush."], ["Conquistador de Boss Rush", "Derrota a todos los comandantes de Boss Rush."]),
+  row("goldenCommand", "bossRushGoldMedals", 5, ["Golden Command", "Earn gold in 5 Boss Rush fights."], ["Comando dourado", "Conquiste ouro em 5 lutas do Boss Rush."], ["Comando dorado", "Consigue oro en 5 combates de Boss Rush."]),
+  row("perfectCommand", "bossRushGoldMedals", 25, ["Perfect Command", "Earn gold against every Boss Rush commander."], ["Comando perfeito", "Conquiste ouro contra todos os comandantes do Boss Rush."], ["Comando perfecto", "Consigue oro contra todos los comandantes de Boss Rush."]),
+  row("weeklyDebut", "weeklyCompletions", 1, ["Weekly Debut", "Complete your first Weekly Challenge."], ["Estreia semanal", "Complete seu primeiro Desafio Semanal."], ["Debut semanal", "Completa tu primer Desafío Semanal."]),
+  row("weeklyRegular", "weeklyCompletions", 4, ["Weekly Regular", "Complete 4 Weekly Challenges."], ["Frequência semanal", "Complete 4 Desafios Semanais."], ["Habitual semanal", "Completa 4 Desafíos Semanales."]),
+  row("weeklyVeteran", "weeklyCompletions", 12, ["Weekly Veteran", "Complete 12 Weekly Challenges."], ["Veterano semanal", "Complete 12 Desafios Semanais."], ["Veterano semanal", "Completa 12 Desafíos Semanales."]),
+  row("beyondTheLimit", "endlessBestSector", 5, ["Beyond the Limit", "Reach Endless sector 5."], ["Além do limite", "Alcance o setor 5 no modo Sem Fim."], ["Más allá del límite", "Alcanza el sector 5 en el modo Sin Fin."]),
+  row("deepOperation", "endlessBestSector", 15, ["Deep Operation", "Reach Endless sector 15."], ["Operação profunda", "Alcance o setor 15 no modo Sem Fim."], ["Operación profunda", "Alcanza el sector 15 en el modo Sin Fin."]),
+  row("infiniteVanguard", "endlessBestSector", 30, ["Infinite Vanguard", "Reach Endless sector 30."], ["Vanguarda infinita", "Alcance o setor 30 no modo Sem Fim."], ["Vanguardia infinita", "Alcanza el sector 30 en el modo Sin Fin."]),
+  row("extractionExpert", "endlessExtractions", 5, ["Extraction Expert", "Bank loot from 5 Endless operations."], ["Especialista em extração", "Resgate o saque de 5 operações Sem Fim."], ["Experto en extracción", "Asegura el botín de 5 operaciones Sin Fin."]),
+  row("skyHighRoller", "largestExtraction", 25000, ["Sky High Roller", "Extract at least $25,000 from one Endless operation."], ["Magnata dos céus", "Extraia pelo menos $25.000 em uma operação Sem Fim."], ["Magnate de los cielos", "Extrae al menos $25,000 en una operación Sin Fin."]),
+]);
+
 const MISSION_ROWS = Object.freeze([
   ...CORE_MISSION_ROWS,
+  ...MODE_MISSION_ROWS,
   row(
     MASTER_MISSION_ID,
     "completedMissions",
-    CORE_MISSION_ROWS.length,
-    ["Master Gun Champion", `Complete the other ${CORE_MISSION_ROWS.length} missions.`],
-    ["Campeão Master Gun", `Complete as outras ${CORE_MISSION_ROWS.length} missões.`],
-    ["Campeón Master Gun", `Completa las otras ${CORE_MISSION_ROWS.length} misiones.`],
+    CORE_MISSION_ROWS.length + MODE_MISSION_ROWS.length,
+    ["Master Gun Champion", `Complete the other ${CORE_MISSION_ROWS.length + MODE_MISSION_ROWS.length} missions.`],
+    ["Campeão Master Gun", `Complete as outras ${CORE_MISSION_ROWS.length + MODE_MISSION_ROWS.length} missões.`],
+    ["Campeón Master Gun", `Completa las otras ${CORE_MISSION_ROWS.length + MODE_MISSION_ROWS.length} misiones.`],
   ),
 ]);
 

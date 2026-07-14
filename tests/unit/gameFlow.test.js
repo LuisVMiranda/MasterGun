@@ -45,11 +45,15 @@ describe("run settlement", () => {
 
   it("opens the shop only after the victory prompt is continued", () => {
     const victory = completeRun(createRunWithCash(705, 40));
-    const shop = continueRunVictory(victory);
+    const achievement = continueRunVictory(victory);
+    const shop = continueRunVictory(achievement);
 
     expect(victory.phase).toBe(PHASE.VICTORY);
+    expect(achievement.phase).toBe(PHASE.VICTORY);
+    expect(achievement.lastSummary.achievementPromptActive).toBe(true);
+    expect(achievement.lastSummary.newAchievementIds).toContain("firstSortie");
     expect(shop.phase).toBe(PHASE.SHOP);
-    expect(shop.lastSummary).toBe(victory.lastSummary);
+    expect(shop.lastSummary).toBe(achievement.lastSummary);
   });
 
 });

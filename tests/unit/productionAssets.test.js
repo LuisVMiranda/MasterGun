@@ -41,6 +41,20 @@ describe("approved production assets", () => {
     expect(wall.children[0].userData.damageStage).toBe("critical");
   });
 
+  it("uses a production cash collector with visible damage states at the finish", () => {
+    const finishEntity = entity(ENTITY.FINISH_BLOCK, { health: 100, maxHealth: 100, value: 120 });
+    const collector = createEntityObject(finishEntity);
+    const vault = collector.getObjectByName("finish-cash-collector");
+
+    expect(vault.getObjectByName("collector-vault")).toBeTruthy();
+    expect(vault.getObjectByName("collector-coin-core")).toBeTruthy();
+    expect(vault.getObjectByName("collector-cash-stack")).toBeTruthy();
+    updateHealthObject(collector, { ...finishEntity, health: 45 });
+    expect(vault.userData.finishCollector.cracks.visible).toBe(true);
+    updateHealthObject(collector, { ...finishEntity, health: 15 });
+    expect(vault.userData.finishCollector.topCash.rotation.z).toBeLessThan(0);
+  });
+
   it("uses approved articulated operators for soldiers and shooters", () => {
     const soldier = createSoldierObject();
     const shooter = createEntityObject(entity(ENTITY.SHOOTER, { shooterKind: "still" }));
@@ -49,6 +63,18 @@ describe("approved production assets", () => {
       animateActorObject(actor, HUMANOID_MOTION.LEFT, 0.7);
       expect(actor.userData.animation).toBe("strafeLeft");
     });
+  });
+
+  it("sockets the Arcade boss crown to the animated head rig", () => {
+    const boss = createEntityObject(entity(ENTITY.BOSS, { bossFamily: null, label: "Boss" }));
+    const crown = boss.getObjectByName("boss-crown");
+    const rig = boss.userData.humanoid.rig;
+
+    expect(crown.parent).toBe(rig.head);
+    animateActorObject(boss, HUMANOID_MOTION.LEFT, 0.7);
+    boss.updateWorldMatrix(true, true);
+    const rotation = crown.getWorldQuaternion(new THREE.Quaternion());
+    expect(Math.abs(rotation.z)).toBeGreaterThan(0.02);
   });
 
   it("keeps far operators and ordinary projectiles inside fixed draw pools", () => {

@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { createDefaultSave } from "../../src/game/simulation/economy.js";
 import { createAppState } from "../../src/game/simulation/runState.js";
 import { renderMissions } from "../../src/ui/missionViews.js";
-import { renderRoundVictoryPrompt, renderRunVictory } from "../../src/ui/runSummaryView.js";
-import { renderSoundPanel, renderSpecialShotPrompt } from "../../src/ui/hud.js";
+import { renderAchievementPrompt, renderRoundVictoryPrompt, renderRunVictory } from "../../src/ui/runSummaryView.js";
+import { renderArcadeLobby, renderSoundPanel, renderSpecialShotPrompt } from "../../src/ui/hud.js";
 import { renderShop } from "../../src/ui/shopView.js";
 import { UPGRADE_DEFINITIONS } from "../../src/game/content/upgrades.js";
 
@@ -42,6 +42,28 @@ describe("ui views", () => {
     expect(html).toContain("840");
     expect(html).not.toContain("firework-field");
     expect(renderRunVictory({ failed: true }, "en")).toBe("");
+  });
+
+  it("renders a consolidated localized achievement celebration", () => {
+    const summary = { newAchievementIds: ["firstSortie", "masteryInitiate"], achievementPromptActive: true };
+    const portuguese = renderAchievementPrompt(summary, "pt-BR");
+
+    expect(renderRoundVictoryPrompt(summary, "pt-BR")).toBe(portuguese);
+    expect(portuguese).toContain("Conquista desbloqueada");
+    expect(portuguese).toContain("Primeira decolagem");
+    expect(portuguese).toContain("Início da maestria");
+    expect(portuguese).toContain("firework-field");
+    expect(portuguese).toContain("achievement-unlock-list");
+  });
+
+  it("keeps mode navigation separate from the centered Arcade title", () => {
+    const html = renderArcadeLobby(createAppState(createDefaultSave()));
+    const navigationEnd = html.indexOf("</nav>");
+    const headingStart = html.indexOf('<header class="arcade-menu-heading">');
+
+    expect(html).toContain("menu-back-button");
+    expect(navigationEnd).toBeLessThan(headingStart);
+    expect(html).toContain("M14.5 5l-7 7 7 7");
   });
 
   it("renders localized special-shot instructions only while aiming", () => {

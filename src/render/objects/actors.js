@@ -13,6 +13,7 @@ import { SOLDIER_SHADOW, addContactShadow, applyEntityShadow, enableShadowCastin
 import { setWeaponContactShadow } from "./weaponShadows.js";
 import { decorateBoss } from "./bossVisuals.js";
 import { attachDamageVisual, updateDamageVisual } from "./damageStates.js";
+import { createFinishCollector, updateFinishCollector } from "./finishCollector.js";
 
 const shared = {
   specialBulletMaterial: new THREE.MeshStandardMaterial({ color: "#fff45c", emissive: "#ff32cf", emissiveIntensity: 1.8, metalness: 0.15, roughness: 0.2 }),
@@ -322,18 +323,14 @@ function createCashDropObject(entity) {
 
 function createFinishBlockObject(entity) {
   const group = new THREE.Group();
-  const block = new THREE.Mesh(
-    new THREE.BoxGeometry(1.25, 1.15, 0.8),
-    new THREE.MeshStandardMaterial({ color: "#273040", roughness: 0.66 }),
-  );
-  const cash = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.16, 0.46), shared.cashMaterial);
+  const collector = createFinishCollector();
   const label = createLabelSprite(entity.label, { background: "#202938", scaleX: 1.18, scaleY: 0.5, fontSize: 78 });
   const health = createHealthBar(COLORS.cash);
-  block.position.y = 0.57;
-  cash.position.y = 1.22;
-  health.position.set(0, 1.48, 0);
-  label.position.set(0, 1.88, 0);
-  group.add(block, cash, health, label);
+  health.position.set(0, 1.76, 0);
+  label.position.set(0, 2.14, 0);
+  group.add(collector, health, label);
+  group.userData.handlesDamageVisual = true;
+  group.userData.updateVisual = (ratio) => updateFinishCollector(collector, ratio);
   attachHealthBar(group, health);
   return group;
 }
@@ -348,14 +345,22 @@ function createBossObject(entity) {
   const health = createHealthBar(COLORS.debuff);
   addBossLoadout(group, entity.bossFamily);
   positionUnitMarkers(group, health, label, { health: 0.12, label: 0.62 });
-  if (!entity.bossFamily) {
-    crown.position.y = group.userData.humanoid.height - 0.02;
-    group.add(crown);
-  }
+  if (!entity.bossFamily) attachBossCrown(group, crown);
   group.add(health, label);
   decorateBoss(group, entity);
   attachHealthBar(group, health);
   return group;
+}
+
+function attachBossCrown(group, crown) {
+  const humanoid = group.userData.humanoid;
+  const rig = humanoid?.rig;
+  if (!rig) return;
+  const scale = rig.body.scale.y || 1;
+  crown.name = "boss-crown";
+  crown.position.y = (humanoid.height - 0.02) / scale;
+  crown.scale.setScalar(1 / scale);
+  rig.head.add(crown);
 }
 
 function addEnemyLoadout(group, enemyKind) {

@@ -3,6 +3,7 @@ import { icon } from "./icons.js";
 import { renderFireworks } from "./celebration.js";
 import { GAME_MODE } from "../game/content/modes.js";
 import { formatCash } from "../game/simulation/math.js";
+import { getMissionCopy, getMissionDefinition } from "../game/content/achievements.js";
 
 const HIGHLIGHTS = Object.freeze([
   { id: "damage", icon: "power" },
@@ -27,6 +28,7 @@ export function renderRunVictory(summary, locale) {
 
 export function renderRoundVictoryPrompt(summary, locale) {
   if (!summary || summary.failed) return "";
+  if (summary.achievementPromptActive) return renderAchievementPrompt(summary, locale);
   if (summary.mode && summary.mode !== GAME_MODE.ARCADE) return renderModeVictoryPrompt(summary, locale);
   return `
     <div class="panel victory-panel round-victory-panel" data-testid="round-victory">
@@ -36,6 +38,21 @@ export function renderRoundVictoryPrompt(summary, locale) {
       <button class="primary-button victory-continue" data-action="continueVictory" data-testid="continue-victory" data-focus-key="continueVictory">
         ${t(locale, "action.continue")}
       </button>
+    </div>
+  `;
+}
+
+export function renderAchievementPrompt(summary, locale) {
+  const missions = (summary.newAchievementIds ?? []).map(getMissionDefinition).filter(Boolean);
+  if (missions.length === 0) return "";
+  return `
+    <div class="panel victory-panel round-victory-panel achievement-victory-panel" data-testid="achievement-victory">
+      ${renderFireworks(20)}
+      <span class="victory-kicker">${t(locale, "mission.unlockedKicker")}</span>
+      <h1>${t(locale, "mission.unlockedTitle")}</h1>
+      <p>${t(locale, "mission.unlockedCount", { value: missions.length })}</p>
+      <div class="achievement-unlock-list">${missions.map((mission) => renderAchievementUnlock(mission, locale)).join("")}</div>
+      <button class="primary-button victory-continue" data-action="continueVictory" data-testid="continue-victory" data-focus-key="continueVictory">${t(locale, "action.continue")}</button>
     </div>
   `;
 }
@@ -71,4 +88,9 @@ function renderModeVictoryPrompt(summary, locale) {
 function renderHighlight(item, highlights, locale) {
   const value = Math.max(0, Math.round(highlights[item.id] ?? 0));
   return `<span>${icon(item.icon)} <b>${value}</b> ${t(locale, `shop.highlight.${item.id}`)}</span>`;
+}
+
+function renderAchievementUnlock(mission, locale) {
+  const copy = getMissionCopy(mission, locale);
+  return `<article><span>${icon("score")}</span><div><strong>${copy.title}</strong><small>${copy.description}</small></div></article>`;
 }
